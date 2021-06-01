@@ -240,7 +240,8 @@ public class BaseJdbcClient
                     if (columnMapping.isPresent()) {
                         String columnName = resultSet.getString("COLUMN_NAME");
                         boolean nullable = columnNullable == resultSet.getInt("NULLABLE");
-                        columns.add(new JdbcColumnHandle(connectorId, columnName, typeHandle, columnMapping.get().getType(), nullable));
+                        Optional<String> comment = Optional.ofNullable(resultSet.getString("REMARKS"));
+                        columns.add(new JdbcColumnHandle(connectorId, columnName, typeHandle, columnMapping.get().getType(), nullable, comment));
                     }
                 }
                 if (columns.isEmpty()) {

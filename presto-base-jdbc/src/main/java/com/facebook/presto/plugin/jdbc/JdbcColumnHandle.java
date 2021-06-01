@@ -20,6 +20,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Collections.emptyMap;
@@ -33,6 +34,7 @@ public final class JdbcColumnHandle
     private final JdbcTypeHandle jdbcTypeHandle;
     private final Type columnType;
     private final boolean nullable;
+    private final Optional<String> comment;
 
     @JsonCreator
     public JdbcColumnHandle(
@@ -40,13 +42,15 @@ public final class JdbcColumnHandle
             @JsonProperty("columnName") String columnName,
             @JsonProperty("jdbcTypeHandle") JdbcTypeHandle jdbcTypeHandle,
             @JsonProperty("columnType") Type columnType,
-            @JsonProperty("nullable") boolean nullable)
+            @JsonProperty("nullable") boolean nullable,
+            @JsonProperty("comment") Optional<String> comment)
     {
         this.connectorId = requireNonNull(connectorId, "connectorId is null");
         this.columnName = requireNonNull(columnName, "columnName is null");
         this.jdbcTypeHandle = requireNonNull(jdbcTypeHandle, "jdbcTypeHandle is null");
         this.columnType = requireNonNull(columnType, "columnType is null");
         this.nullable = nullable;
+        this.comment = comment;
     }
 
     @JsonProperty
@@ -79,9 +83,15 @@ public final class JdbcColumnHandle
         return nullable;
     }
 
+    @JsonProperty
+    public Optional<String> getComment()
+    {
+        return comment;
+    }
+
     public ColumnMetadata getColumnMetadata()
     {
-        return new ColumnMetadata(columnName, columnType, nullable, null, null, false, emptyMap());
+        return new ColumnMetadata(columnName, columnType, nullable, comment.get(), null, false, emptyMap());
     }
 
     @Override
@@ -113,6 +123,7 @@ public final class JdbcColumnHandle
                 .add("jdbcTypeHandle", jdbcTypeHandle)
                 .add("columnType", columnType)
                 .add("nullable", nullable)
+                .add("comment", comment)
                 .toString();
     }
 }
