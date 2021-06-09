@@ -76,7 +76,6 @@ import static com.facebook.presto.orc.WriterStats.FlushReason.DICTIONARY_FULL;
 import static com.facebook.presto.orc.WriterStats.FlushReason.MAX_BYTES;
 import static com.facebook.presto.orc.WriterStats.FlushReason.MAX_ROWS;
 import static com.facebook.presto.orc.metadata.ColumnEncoding.ColumnEncodingKind.DIRECT;
-import static com.facebook.presto.orc.metadata.ColumnEncoding.DEFAULT_SEQUENCE_ID;
 import static com.facebook.presto.orc.metadata.DwrfMetadataWriter.toFileStatistics;
 import static com.facebook.presto.orc.metadata.DwrfMetadataWriter.toStripeEncryptionGroup;
 import static com.facebook.presto.orc.metadata.PostScript.MAGIC;
@@ -172,6 +171,7 @@ public class OrcWriter
                 .setCompressionMaxBufferSize(options.getMaxCompressionBufferSize())
                 .setStringStatisticsLimit(options.getMaxStringStatisticsLimit())
                 .setIntegerDictionaryEncodingEnabled(options.isIntegerDictionaryEncodingEnabled())
+                .setStringDictionarySortingEnabled(options.isStringDictionarySortingEnabled())
                 .build();
         recordValidation(validation -> validation.setCompression(compressionKind));
 
@@ -241,7 +241,6 @@ public class OrcWriter
             Type fieldType = types.get(fieldId);
             ColumnWriter columnWriter = createColumnWriter(
                     fieldColumnIndex,
-                    DEFAULT_SEQUENCE_ID,
                     orcTypes,
                     fieldType,
                     columnWriterOptions,
