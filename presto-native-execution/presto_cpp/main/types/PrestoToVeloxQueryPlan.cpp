@@ -760,6 +760,56 @@ std::shared_ptr<connector::ConnectorTableHandle> toConnectorTableHandle(
         remainingFilter);
   }
 
+  if (auto icebergLayout =
+          std::dynamic_pointer_cast<const protocol::IcebergTableLayoutHandle>(
+              tableHandle.connectorTableLayout)) {
+    VELOX_CHECK(
+        icebergLayout->pushdownFilterEnabled,
+        "Table scan with filter pushdown disabled is not supported");
+
+    for (const auto& entry : icebergLayout->partitionColumns) {
+      partitionColumns.emplace(entry.columnIdentity.name, toColumnHandle(&entry));
+    }
+
+    connector::hive::SubfieldFilters subfieldFilters;
+    auto domains = icebergLayout->domainPredicate.domains;
+    for (const auto& domain : *domains) {
+      auto filter = domain.second;
+      subfieldFilters[common::Subfield(domain.first)] =
+          toFilter(domain.second, exprConverter);
+    }
+
+    auto remainingFilter =
+        exprConverter.toVeloxExpr(icebergLayout->remainingPredicate);
+    if (auto constant =
+            std::dynamic_pointer_cast<const core::ConstantTypedExpr>(
+                remainingFilter)) {
+      bool value = constant->value().value<bool>();
+      VELOX_CHECK(value, "Unexpected always-false remaining predicate");
+
+      // Use null for always-true filter.
+      remainingFilter = nullptr;
+    }
+
+    auto hiveTableHandle =
+        std::dynamic_pointer_cast<const protocol::HiveTableHandle>(
+            tableHandle.connectorHandle);
+    VELOX_CHECK_NOT_NULL(hiveTableHandle);
+
+    // Use fully qualified name if available.
+    std::string tableName = hiveTableHandle->schemaName.empty()
+        ? hiveTableHandle->tableName
+        : fmt::format(
+              "{}.{}", hiveTableHandle->schemaName, hiveTableHandle->tableName);
+
+    return std::make_shared<connector::hive::HiveTableHandle>(
+        tableHandle.connectorId,
+        tableName,
+        true,
+        std::move(subfieldFilters),
+        remainingFilter);
+  }
+
   if (auto tpchLayout =
           std::dynamic_pointer_cast<const protocol::TpchTableLayoutHandle>(
               tableHandle.connectorTableLayout)) {

@@ -13,12 +13,16 @@
  */
 package com.facebook.presto.iceberg;
 
+import com.facebook.presto.common.Subfield;
 import com.facebook.presto.common.predicate.TupleDomain;
 import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.ConnectorTableLayoutHandle;
+import com.facebook.presto.spi.relation.RowExpression;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableList;
 
+import java.util.List;
 import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;
@@ -26,16 +30,52 @@ import static java.util.Objects.requireNonNull;
 public class IcebergTableLayoutHandle
         implements ConnectorTableLayoutHandle
 {
+    private final List<IcebergColumnHandle> partitionColumns;
+    private final boolean pushdownFilterEnabled;
+    private final TupleDomain<Subfield> domainPredicate;
+    private final RowExpression remainingPredicate;
     private final IcebergTableHandle table;
     private final TupleDomain<ColumnHandle> tupleDomain;
 
     @JsonCreator
     public IcebergTableLayoutHandle(
+            @JsonProperty("partitionColumns") List<IcebergColumnHandle> partitionColumns,
+            @JsonProperty("domainPredicate") TupleDomain<Subfield> domainPredicate,
+            @JsonProperty("remainingPredicate") RowExpression remainingPredicate,
+            @JsonProperty("pushdownFilterEnabled") boolean pushdownFilterEnabled,
             @JsonProperty("table") IcebergTableHandle table,
             @JsonProperty("tupleDomain") TupleDomain<ColumnHandle> domain)
     {
+        this.partitionColumns = ImmutableList.copyOf(requireNonNull(partitionColumns, "partitionColumns is null"));
+        this.domainPredicate = requireNonNull(domainPredicate, "domainPredicate is null");
+        this.remainingPredicate = requireNonNull(remainingPredicate, "remainingPredicate is null");
+        this.pushdownFilterEnabled = pushdownFilterEnabled;
         this.table = requireNonNull(table, "table is null");
         this.tupleDomain = requireNonNull(domain, "tupleDomain is null");
+    }
+
+    @JsonProperty
+    public List<IcebergColumnHandle> getPartitionColumns()
+    {
+        return partitionColumns;
+    }
+
+    @JsonProperty
+    public TupleDomain<Subfield> getDomainPredicate()
+    {
+        return domainPredicate;
+    }
+
+    @JsonProperty
+    public RowExpression getRemainingPredicate()
+    {
+        return remainingPredicate;
+    }
+
+    @JsonProperty
+    public boolean isPushdownFilterEnabled()
+    {
+        return pushdownFilterEnabled;
     }
 
     @JsonProperty
@@ -60,14 +100,18 @@ public class IcebergTableLayoutHandle
             return false;
         }
         IcebergTableLayoutHandle that = (IcebergTableLayoutHandle) o;
-        return Objects.equals(table, that.table) &&
+        return Objects.equals(partitionColumns, that.partitionColumns) &&
+                Objects.equals(domainPredicate, that.domainPredicate) &&
+                Objects.equals(remainingPredicate, that.remainingPredicate) &&
+                Objects.equals(pushdownFilterEnabled, that.pushdownFilterEnabled) &&
+                Objects.equals(table, that.table) &&
                 Objects.equals(tupleDomain, that.tupleDomain);
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(table, tupleDomain);
+        return Objects.hash(partitionColumns, domainPredicate, remainingPredicate, pushdownFilterEnabled, table, tupleDomain);
     }
 
     @Override
