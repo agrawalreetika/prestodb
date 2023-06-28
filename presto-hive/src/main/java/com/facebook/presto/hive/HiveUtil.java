@@ -28,7 +28,10 @@ import com.facebook.presto.common.type.TypeSignatureParameter;
 import com.facebook.presto.common.type.VarcharType;
 import com.facebook.presto.hadoop.TextLineLengthLimitExceededException;
 import com.facebook.presto.hive.avro.PrestoAvroSerDe;
+import com.facebook.presto.hive.iceberg.HiveTableOperations;
 import com.facebook.presto.hive.metastore.Column;
+import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
+import com.facebook.presto.hive.metastore.MetastoreContext;
 import com.facebook.presto.hive.metastore.Storage;
 import com.facebook.presto.hive.metastore.Table;
 import com.facebook.presto.hive.pagefile.PageInputFormat;
@@ -38,6 +41,7 @@ import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.RecordCursor;
+import com.facebook.presto.spi.SchemaTableName;
 import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
 import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
 import com.google.common.base.Joiner;
@@ -69,6 +73,7 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
+import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputFormat;
 import org.apache.hadoop.mapred.JobConf;
@@ -80,6 +85,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
+import org.apache.iceberg.BaseTable;
+import org.apache.iceberg.TableOperations;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
@@ -213,6 +220,8 @@ public final class HiveUtil
     private static final String BIG_DECIMAL_POSTFIX = "BD";
     private static final String USE_RECORD_READER_FROM_INPUT_FORMAT_ANNOTATION = "UseRecordReaderFromInputFormat";
     private static final String USE_FILE_SPLITS_FROM_INPUT_FORMAT_ANNOTATION = "UseFileSplitsFromInputFormat";
+
+    private static final Pattern SIMPLE_NAME = Pattern.compile("[a-z][a-z0-9]*");
 
     static {
         DateTimeParser[] timestampWithoutTimeZoneParser = {
@@ -351,6 +360,11 @@ public final class HiveUtil
                 inputFormatClass = TextInputFormat.class;
             }
 
+            if (inputFormatClass.getName() == FileInputFormat.class.getName()) {
+               // for iceberg
+                inputFormatClass = MapredParquetInputFormat.class;
+            }
+
             return ReflectionUtils.newInstance(inputFormatClass, jobConf);
         }
         catch (ClassNotFoundException | RuntimeException e) {
@@ -423,6 +437,32 @@ public final class HiveUtil
         }
 
         return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
+    }
+
+    public static org.apache.iceberg.Table getHiveIcebergTable(ExtendedHiveMetastore metastore, HdfsEnvironment hdfsEnvironment, ConnectorSession session, SchemaTableName table)
+    {
+        HdfsContext hdfsContext = new HdfsContext(session, table.getSchemaName(), table.getTableName());
+        TableOperations operations = new HiveTableOperations(
+                metastore,
+                new MetastoreContext(session.getIdentity(), session.getQueryId(), session.getClientInfo(), session.getSource(), Optional.empty(), false, HiveColumnConverterProvider.DEFAULT_COLUMN_CONVERTER_PROVIDER),
+                hdfsEnvironment,
+                hdfsContext,
+                table.getSchemaName(),
+                table.getTableName());
+        return new BaseTable(operations, quotedTableName(table));
+    }
+
+    private static String quotedTableName(SchemaTableName name)
+    {
+        return quotedName(name.getSchemaName()) + "." + quotedName(name.getTableName());
+    }
+
+    private static String quotedName(String name)
+    {
+        if (SIMPLE_NAME.matcher(name).matches()) {
+            return name;
+        }
+        return '"' + name.replace("\"", "\"\"") + '"';
     }
 
     public static long parseHiveDate(String value)

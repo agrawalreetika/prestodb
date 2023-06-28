@@ -234,7 +234,8 @@ public abstract class AbstractTestHiveFileSystem
                 config.getSplitLoaderConcurrency(),
                 config.getRecursiveDirWalkerEnabled(),
                 new ConfigBasedCacheQuotaRequirementProvider(cacheConfig),
-                new HiveEncryptionInformationProvider(ImmutableSet.of()));
+                new HiveEncryptionInformationProvider(ImmutableSet.of()),
+                null);
         pageSinkProvider = new HivePageSinkProvider(
                 getDefaultHiveFileWriterFactories(config, metastoreClientConfig),
                 hdfsEnvironment,

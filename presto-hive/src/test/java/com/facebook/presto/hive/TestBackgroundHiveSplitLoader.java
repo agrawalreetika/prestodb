@@ -536,7 +536,8 @@ public class TestBackgroundHiveSplitLoader
                 2,
                 false,
                 false,
-                false);
+                false,
+                null);
     }
 
     private static List<HivePartitionMetadata> samplePartitionMetadatas()
@@ -574,7 +575,8 @@ public class TestBackgroundHiveSplitLoader
                 2,
                 false,
                 false,
-                false);
+                false,
+                null);
     }
 
     private static BackgroundHiveSplitLoader backgroundHiveSplitLoaderOfflinePartitions()
@@ -599,7 +601,8 @@ public class TestBackgroundHiveSplitLoader
                 2,
                 false,
                 false,
-                false);
+                false,
+                null);
     }
 
     private static Iterable<HivePartitionMetadata> createPartitionMetadataWithOfflinePartitions()

@@ -16,6 +16,7 @@ package com.facebook.presto.hive;
 import com.facebook.presto.common.predicate.Domain;
 import com.facebook.presto.hive.cache.HiveCachingHdfsConfiguration;
 import com.facebook.presto.hive.filesystem.ExtendedFileSystem;
+import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
 import com.facebook.presto.hive.metastore.Partition;
 import com.facebook.presto.hive.metastore.Storage;
 import com.facebook.presto.hive.metastore.Table;
@@ -79,6 +80,7 @@ import static com.facebook.presto.hive.NestedDirectoryPolicy.IGNORED;
 import static com.facebook.presto.hive.NestedDirectoryPolicy.RECURSE;
 import static com.facebook.presto.hive.metastore.MetastoreUtil.getHiveSchema;
 import static com.facebook.presto.hive.metastore.MetastoreUtil.getPartitionLocation;
+import static com.facebook.presto.hive.metastore.MetastoreUtil.isIcebergTable;
 import static com.facebook.presto.hive.s3select.S3SelectPushdown.shouldEnablePushdownForTable;
 import static com.facebook.presto.hive.util.ConfigurationUtils.toJobConf;
 import static com.facebook.presto.spi.StandardErrorCode.NOT_SUPPORTED;
@@ -123,7 +125,8 @@ public class StoragePartitionLoader
             Deque<Iterator<InternalHiveSplit>> fileIterators,
             boolean recursiveDirWalkerEnabled,
             boolean schedulerUsesHostAddresses,
-            boolean partialAggregationsPushedDown)
+            boolean partialAggregationsPushedDown,
+            ExtendedHiveMetastore metastore)
     {
         this.table = requireNonNull(table, "table is null");
         this.pathDomain = requireNonNull(pathDomain, "pathDomain is null");
@@ -144,6 +147,10 @@ public class StoragePartitionLoader
                 InputFormat<?, ?> inputFormat = getInputFormat(configuration, table.getStorage().getStorageFormat().getInputFormat(), false);
                 if (isHudiParquetInputFormat(inputFormat)) {
                     directoryListerOverride = Optional.of(new HudiDirectoryLister(configuration, session, table));
+                }
+
+                if (isIcebergTable(table)) {
+                    directoryListerOverride = Optional.of(new IcebergDirectoryLister(metastore, hdfsEnvironment, session, table, pathDomain));
                 }
             }
             catch (PrestoException ex) {

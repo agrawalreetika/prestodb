@@ -27,6 +27,7 @@ import com.facebook.presto.hive.metastore.Column;
 import com.facebook.presto.hive.metastore.DateStatistics;
 import com.facebook.presto.hive.metastore.DecimalStatistics;
 import com.facebook.presto.hive.metastore.DoubleStatistics;
+import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
 import com.facebook.presto.hive.metastore.HiveColumnStatistics;
 import com.facebook.presto.hive.metastore.IntegerStatistics;
 import com.facebook.presto.hive.metastore.MetastoreContext;
@@ -143,6 +144,7 @@ public class HiveSplitManager
     private final CounterStat highMemorySplitSourceCounter;
     private final CacheQuotaRequirementProvider cacheQuotaRequirementProvider;
     private final HiveEncryptionInformationProvider encryptionInformationProvider;
+    private final ExtendedHiveMetastore extendedHiveMetastore;
 
     @Inject
     public HiveSplitManager(
@@ -154,7 +156,8 @@ public class HiveSplitManager
             DirectoryLister directoryLister,
             @ForHiveClient ExecutorService executorService,
             CoercionPolicy coercionPolicy,
-            HiveEncryptionInformationProvider encryptionInformationProvider)
+            HiveEncryptionInformationProvider encryptionInformationProvider,
+            ExtendedHiveMetastore extendedHiveMetastore)
     {
         this(
                 hiveTransactionManager,
@@ -171,7 +174,8 @@ public class HiveSplitManager
                 hiveClientConfig.getSplitLoaderConcurrency(),
                 hiveClientConfig.getRecursiveDirWalkerEnabled(),
                 cacheQuotaRequirementProvider,
-                encryptionInformationProvider);
+                encryptionInformationProvider,
+                extendedHiveMetastore);
     }
 
     public HiveSplitManager(
@@ -189,7 +193,8 @@ public class HiveSplitManager
             int splitLoaderConcurrency,
             boolean recursiveDfsWalkerEnabled,
             CacheQuotaRequirementProvider cacheQuotaRequirementProvider,
-            HiveEncryptionInformationProvider encryptionInformationProvider)
+            HiveEncryptionInformationProvider encryptionInformationProvider,
+            ExtendedHiveMetastore extendedHiveMetastore)
     {
         this.hiveTransactionManager = requireNonNull(hiveTransactionManager, "hiveTransactionManager is null");
         this.namenodeStats = requireNonNull(namenodeStats, "namenodeStats is null");
@@ -207,6 +212,7 @@ public class HiveSplitManager
         this.recursiveDfsWalkerEnabled = recursiveDfsWalkerEnabled;
         this.cacheQuotaRequirementProvider = requireNonNull(cacheQuotaRequirementProvider, "cacheQuotaRequirementProvider is null");
         this.encryptionInformationProvider = requireNonNull(encryptionInformationProvider, "encryptionInformationProvider is null");
+        this.extendedHiveMetastore = extendedHiveMetastore;
     }
 
     @Override
@@ -290,7 +296,8 @@ public class HiveSplitManager
                 min(splitLoaderConcurrency, partitions.size()), // Avoid over-committing split loader concurrency
                 recursiveDfsWalkerEnabled,
                 splitSchedulingContext.schedulerUsesHostAddresses(),
-                layout.isPartialAggregationsPushedDown());
+                layout.isPartialAggregationsPushedDown(),
+                extendedHiveMetastore);
 
         HiveSplitSource splitSource = computeSplitSource(splitSchedulingContext, table, session, hiveSplitLoader);
         hiveSplitLoader.start(splitSource);

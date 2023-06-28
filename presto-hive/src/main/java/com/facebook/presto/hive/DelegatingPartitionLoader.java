@@ -15,6 +15,7 @@ package com.facebook.presto.hive;
 
 import com.facebook.presto.common.predicate.Domain;
 import com.facebook.presto.hive.StoragePartitionLoader.BucketSplitInfo;
+import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
 import com.facebook.presto.hive.metastore.Partition;
 import com.facebook.presto.hive.metastore.Table;
 import com.facebook.presto.spi.ConnectorSession;
@@ -48,7 +49,8 @@ public class DelegatingPartitionLoader
             Deque<Iterator<InternalHiveSplit>> fileIterators,
             boolean recursiveDirWalkerEnabled,
             boolean schedulerUsesHostAddresses,
-            boolean partialAggregationsPushedDown)
+            boolean partialAggregationsPushedDown,
+            ExtendedHiveMetastore metastore)
     {
         this.session = requireNonNull(session, "session is null");
         this.storagePartitionLoader = new StoragePartitionLoader(
@@ -62,7 +64,8 @@ public class DelegatingPartitionLoader
                 fileIterators,
                 recursiveDirWalkerEnabled,
                 schedulerUsesHostAddresses,
-                partialAggregationsPushedDown);
+                partialAggregationsPushedDown,
+                metastore);
         this.manifestPartitionLoader = new ManifestPartitionLoader(table, pathDomain, session, hdfsEnvironment, namenodeStats, directoryLister, recursiveDirWalkerEnabled, schedulerUsesHostAddresses);
     }
 

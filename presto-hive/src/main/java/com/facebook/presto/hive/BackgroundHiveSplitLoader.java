@@ -15,6 +15,7 @@ package com.facebook.presto.hive;
 
 import com.facebook.presto.common.predicate.Domain;
 import com.facebook.presto.hive.StoragePartitionLoader.BucketSplitInfo;
+import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
 import com.facebook.presto.hive.metastore.Table;
 import com.facebook.presto.hive.util.ResumableTask;
 import com.facebook.presto.hive.util.ResumableTasks;
@@ -81,13 +82,14 @@ public class BackgroundHiveSplitLoader
             int loaderConcurrency,
             boolean recursiveDirWalkerEnabled,
             boolean schedulerUsesHostAddresses,
-            boolean partialAggregationsPushedDown)
+            boolean partialAggregationsPushedDown,
+            ExtendedHiveMetastore metastore)
     {
         this.loaderConcurrency = loaderConcurrency;
         checkArgument(loaderConcurrency > 0, "loaderConcurrency must be > 0, found: %s", loaderConcurrency);
         this.executor = requireNonNull(executor, "executor is null");
         this.partitions = new ConcurrentLazyQueue<>(requireNonNull(partitions, "partitions is null"));
-        this.delegatingPartitionLoader = new DelegatingPartitionLoader(table, pathDomain, tableBucketInfo, session, hdfsEnvironment, namenodeStats, directoryLister, fileIterators, recursiveDirWalkerEnabled, schedulerUsesHostAddresses, partialAggregationsPushedDown);
+        this.delegatingPartitionLoader = new DelegatingPartitionLoader(table, pathDomain, tableBucketInfo, session, hdfsEnvironment, namenodeStats, directoryLister, fileIterators, recursiveDirWalkerEnabled, schedulerUsesHostAddresses, partialAggregationsPushedDown, metastore);
     }
 
     @Override
