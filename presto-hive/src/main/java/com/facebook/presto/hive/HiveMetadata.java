@@ -257,6 +257,7 @@ import static com.facebook.presto.hive.HiveTableProperties.PARTITIONED_BY_PROPER
 import static com.facebook.presto.hive.HiveTableProperties.PREFERRED_ORDERING_COLUMNS;
 import static com.facebook.presto.hive.HiveTableProperties.SORTED_BY_PROPERTY;
 import static com.facebook.presto.hive.HiveTableProperties.STORAGE_FORMAT_PROPERTY;
+import static com.facebook.presto.hive.HiveTableProperties.TABLE_TYPE;
 import static com.facebook.presto.hive.HiveTableProperties.getAvroSchemaUrl;
 import static com.facebook.presto.hive.HiveTableProperties.getBucketProperty;
 import static com.facebook.presto.hive.HiveTableProperties.getCsvProperty;
@@ -1268,6 +1269,10 @@ public class HiveMetadata
 
         // Encryption specific settings
         tableProperties.putAll(tableEncryptionProperties.map(TableEncryptionProperties::toHiveProperties).orElseGet(ImmutableMap::of));
+
+        // Table Type property
+        String prestoTableType = tableMetadata.getProperties().get(TABLE_TYPE).toString();
+        tableProperties.put(TABLE_TYPE, prestoTableType);
 
         return tableProperties.build();
     }

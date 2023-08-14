@@ -58,6 +58,7 @@ public class HiveTableProperties
     public static final String CSV_SEPARATOR = "csv_separator";
     public static final String CSV_QUOTE = "csv_quote";
     public static final String CSV_ESCAPE = "csv_escape";
+    public static final String TABLE_TYPE = "presto_table_type";
 
     private final List<PropertyMetadata<?>> tableProperties;
 
