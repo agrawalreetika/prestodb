@@ -71,6 +71,7 @@ import static com.facebook.presto.hive.HiveUtil.buildDirectoryContextProperties;
 import static com.facebook.presto.hive.HiveUtil.getFooterCount;
 import static com.facebook.presto.hive.HiveUtil.getHeaderCount;
 import static com.facebook.presto.hive.HiveUtil.getInputFormat;
+import static com.facebook.presto.hive.HiveUtil.isDeltaTable;
 import static com.facebook.presto.hive.HiveUtil.isHudiParquetInputFormat;
 import static com.facebook.presto.hive.HiveUtil.shouldUseFileSplitsFromInputFormat;
 import static com.facebook.presto.hive.HiveWriterFactory.getBucketNumber;
@@ -144,6 +145,10 @@ public class StoragePartitionLoader
                 InputFormat<?, ?> inputFormat = getInputFormat(configuration, table.getStorage().getStorageFormat().getInputFormat(), false);
                 if (isHudiParquetInputFormat(inputFormat)) {
                     directoryListerOverride = Optional.of(new HudiDirectoryLister(configuration, session, table));
+                }
+                // delta table check
+                else if (isDeltaTable(table)) {
+                    directoryListerOverride = Optional.of(new DeltaDirectoryLister(hdfsEnvironment, configuration, session));
                 }
             }
             catch (PrestoException ex) {

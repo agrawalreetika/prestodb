@@ -149,6 +149,7 @@ import static com.facebook.presto.hive.HiveErrorCode.HIVE_INVALID_VIEW_DATA;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_SERDE_NOT_FOUND;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_TABLE_BUCKETING_IS_IGNORED;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_UNSUPPORTED_FORMAT;
+import static com.facebook.presto.hive.HiveTableProperties.TABLE_TYPE;
 import static com.facebook.presto.hive.metastore.MetastoreUtil.HIVE_DEFAULT_DYNAMIC_PARTITION;
 import static com.facebook.presto.hive.metastore.MetastoreUtil.checkCondition;
 import static com.facebook.presto.hive.metastore.MetastoreUtil.getMetastoreHeaders;
@@ -187,6 +188,7 @@ import static org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector.Cate
 public final class HiveUtil
 {
     public static final String CUSTOM_FILE_SPLIT_CLASS_KEY = "custom_split_class";
+    public static final String DELTA = "delta";
 
     public static final String PRESTO_QUERY_ID = "presto_query_id";
     public static final String PRESTO_QUERY_SOURCE = "presto_query_source";
@@ -407,6 +409,15 @@ public final class HiveUtil
     static boolean isHudiParquetInputFormat(InputFormat<?, ?> inputFormat)
     {
         return inputFormat instanceof HoodieParquetInputFormat;
+    }
+
+    static boolean isDeltaTable(Table table)
+    {
+        Map<String, String> tableParameters = table.getParameters();
+        if (tableParameters.containsKey(TABLE_TYPE)) {
+            return tableParameters.get(TABLE_TYPE).equals(DELTA);
+        }
+        return false;
     }
 
     private static boolean shouldUseFileSplitsForHudi(InputFormat<?, ?> inputFormat, HoodieTableMetaClient metaClient)
