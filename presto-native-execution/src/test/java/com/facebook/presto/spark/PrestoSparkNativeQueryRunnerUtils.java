@@ -154,7 +154,7 @@ public class PrestoSparkNativeQueryRunnerUtils
     public static QueryRunner createJavaQueryRunner()
             throws Exception
     {
-        return PrestoNativeQueryRunnerUtils.createJavaQueryRunner(Optional.of(getBaseDataPath()), "legacy", DEFAULT_STORAGE_FORMAT, true);
+        return PrestoNativeQueryRunnerUtils.createJavaQueryRunner(Optional.of(getBaseDataPath()), "legacy", DEFAULT_STORAGE_FORMAT, true, false);
     }
 
     public static void customizeLogging()

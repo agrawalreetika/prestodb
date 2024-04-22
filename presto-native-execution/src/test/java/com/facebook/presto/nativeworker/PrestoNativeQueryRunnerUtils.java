@@ -17,12 +17,22 @@ import com.facebook.airlift.log.Logger;
 import com.facebook.presto.functionNamespace.FunctionNamespaceManagerPlugin;
 import com.facebook.presto.functionNamespace.json.JsonFileBasedFunctionNamespaceManagerFactory;
 import com.facebook.presto.hive.HiveQueryRunner;
+import com.facebook.presto.hive.metastore.Column;
+import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
+import com.facebook.presto.hive.metastore.PrincipalPrivileges;
+import com.facebook.presto.hive.metastore.Storage;
+import com.facebook.presto.hive.metastore.StorageFormat;
+import com.facebook.presto.hive.metastore.Table;
 import com.facebook.presto.iceberg.FileFormat;
 import com.facebook.presto.testing.QueryRunner;
 import com.facebook.presto.tests.DistributedQueryRunner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.io.Resources;
+import org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat;
+import org.apache.hadoop.hive.ql.io.SymlinkTextInputFormat;
+import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -35,12 +45,18 @@ import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.BiFunction;
 
+import static com.facebook.presto.hive.HiveQueryRunner.METASTORE_CONTEXT;
+import static com.facebook.presto.hive.HiveQueryRunner.createDatabaseMetastoreObject;
+import static com.facebook.presto.hive.HiveQueryRunner.getFileHiveMetastore;
 import static com.facebook.presto.hive.HiveTestUtils.getProperty;
+import static com.facebook.presto.hive.HiveType.HIVE_LONG;
+import static com.facebook.presto.hive.metastore.PrestoTableType.EXTERNAL_TABLE;
 import static com.facebook.presto.iceberg.IcebergQueryRunner.createIcebergQueryRunner;
 import static com.facebook.presto.nativeworker.NativeQueryRunnerUtils.getNativeWorkerHiveProperties;
 import static com.facebook.presto.nativeworker.NativeQueryRunnerUtils.getNativeWorkerIcebergProperties;
 import static com.facebook.presto.nativeworker.NativeQueryRunnerUtils.getNativeWorkerSystemProperties;
 import static java.lang.String.format;
+import static java.util.Collections.emptyList;
 import static java.util.Objects.requireNonNull;
 import static org.testng.Assert.assertTrue;
 
@@ -55,6 +71,13 @@ public class PrestoNativeQueryRunnerUtils
 
     private static final Logger log = Logger.get(PrestoNativeQueryRunnerUtils.class);
     private static final String DEFAULT_STORAGE_FORMAT = "DWRF";
+    private static final String DEFAULT_SCHEMA = "default";
+    private static final PrincipalPrivileges PRINCIPAL_PRIVILEGES = new PrincipalPrivileges(ImmutableMultimap.of(), ImmutableMultimap.of());
+
+    private static final StorageFormat STORAGE_FORMAT_SYMLINK_TABLE = StorageFormat.create(
+            ParquetHiveSerDe.class.getName(),
+            SymlinkTextInputFormat.class.getName(),
+            HiveIgnoreKeyTextOutputFormat.class.getName());
     private PrestoNativeQueryRunnerUtils() {}
 
     public static QueryRunner createQueryRunner(boolean addStorageFormatToPath)
@@ -115,13 +138,19 @@ public class PrestoNativeQueryRunnerUtils
         return createJavaQueryRunner(Optional.of(getNativeQueryRunnerParameters().dataDirectory), storageFormat, addStorageFormatToPath);
     }
 
+    public static QueryRunner createJavaQueryRunner(String storageFormat, boolean addStorageFormatToPath, boolean createExternalTable)
+            throws Exception
+    {
+        return createJavaQueryRunner(Optional.of(getNativeQueryRunnerParameters().dataDirectory), "sql-standard", storageFormat, addStorageFormatToPath, createExternalTable);
+    }
+
     public static QueryRunner createJavaQueryRunner(Optional<Path> dataDirectory, String storageFormat, boolean addStorageFormatToPath)
             throws Exception
     {
-        return createJavaQueryRunner(dataDirectory, "sql-standard", storageFormat, addStorageFormatToPath);
+        return createJavaQueryRunner(dataDirectory, "sql-standard", storageFormat, addStorageFormatToPath, false);
     }
 
-    public static QueryRunner createJavaQueryRunner(Optional<Path> baseDataDirectory, String security, String storageFormat, boolean addStorageFormatToPath)
+    public static QueryRunner createJavaQueryRunner(Optional<Path> baseDataDirectory, String security, String storageFormat, boolean addStorageFormatToPath, boolean createExternalTable)
             throws Exception
     {
         ImmutableMap.Builder<String, String> hivePropertiesBuilder = new ImmutableMap.Builder<>();
@@ -144,6 +173,14 @@ public class PrestoNativeQueryRunnerUtils
                         security,
                         hivePropertiesBuilder.build(),
                         dataDirectory);
+
+        if (createExternalTable) {
+            ExtendedHiveMetastore metastore = getFileHiveMetastore(queryRunner);
+            if (createExternalTable && !metastore.getDatabase(METASTORE_CONTEXT, DEFAULT_SCHEMA).isPresent()) {
+                metastore.createDatabase(METASTORE_CONTEXT, createDatabaseMetastoreObject(DEFAULT_SCHEMA));
+                metastore.createTable(METASTORE_CONTEXT, createHiveSymlinkTable(DEFAULT_SCHEMA, "hive_symlink_table"), PRINCIPAL_PRIVILEGES, emptyList());
+            }
+        }
         return queryRunner;
     }
 
@@ -517,5 +554,30 @@ public class PrestoNativeQueryRunnerUtils
                         "supported-function-languages", "CPP",
                         "function-implementation-type", "CPP",
                         "json-based-function-manager.path-to-function-definition", jsonDefinitionPath));
+    }
+
+    public static Table createHiveSymlinkTable(String databaseName, String tableName)
+    {
+        return new Table(
+                databaseName,
+                tableName,
+                "hive",
+                EXTERNAL_TABLE,
+                new Storage(STORAGE_FORMAT_SYMLINK_TABLE,
+                        getTableBasePath(tableName) + "/_symlink_format_manifest",
+                        Optional.empty(),
+                        false,
+                        ImmutableMap.of(),
+                        ImmutableMap.of()),
+                ImmutableList.of(new Column("col", HIVE_LONG, Optional.empty(), Optional.empty())),
+                ImmutableList.of(),
+                ImmutableMap.of(),
+                Optional.empty(),
+                Optional.empty());
+    }
+
+    private static String getTableBasePath(String tableName)
+    {
+        return PrestoNativeQueryRunnerUtils.class.getClassLoader().getResource(tableName).toString();
     }
 }

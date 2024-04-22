@@ -50,3 +50,6 @@ Only specific connectors are supported in the Presto C++ evaluation engine.
 * Iceberg connector supports both V1 and V2 tables, including tables with delete files.
 
 * TPCH connector, with ``tpch.naming=standard`` catalog property.
+
+* Hive connector supports Delta table access using Symlink table using Hive Connector in Prestissimo.
+  Details about Delta Symlink table is available `here <https://docs.delta.io/latest/presto-integration.html>`_.
