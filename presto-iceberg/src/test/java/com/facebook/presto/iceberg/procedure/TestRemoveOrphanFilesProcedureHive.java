@@ -19,6 +19,7 @@ import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
 import com.facebook.presto.hive.metastore.MetastoreContext;
 import com.facebook.presto.hive.metastore.file.FileHiveMetastore;
 import com.facebook.presto.iceberg.HiveTableOperations;
+import com.facebook.presto.iceberg.IcebergConfig;
 import com.facebook.presto.iceberg.IcebergHiveTableOperationsConfig;
 import com.facebook.presto.iceberg.IcebergUtil;
 import com.facebook.presto.metadata.CatalogManager;
@@ -69,6 +70,7 @@ public class TestRemoveOrphanFilesProcedureHive
                 getHdfsEnvironment(),
                 hdfsContext,
                 new IcebergHiveTableOperationsConfig(),
+                new IcebergConfig(),
                 "tpch",
                 tableName,
                 session.getUser(),
@@ -91,6 +93,7 @@ public class TestRemoveOrphanFilesProcedureHive
         return IcebergUtil.getHiveIcebergTable(getFileHiveMetastore(),
                 getHdfsEnvironment(),
                 new IcebergHiveTableOperationsConfig(),
+                new IcebergConfig(),
                 getQueryRunner().getDefaultSession().toConnectorSession(connectorId),
                 SchemaTableName.valueOf("tpch." + tableName));
     }

@@ -152,6 +152,7 @@ public class IcebergHiveMetadata
     private final DateTimeZone timeZone = DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneId.of(TimeZone.getDefault().getID())));
     private final IcebergHiveTableOperationsConfig hiveTableOeprationsConfig;
 
+    private final IcebergConfig icebergConfig;
     public IcebergHiveMetadata(
             ExtendedHiveMetastore metastore,
             HdfsEnvironment hdfsEnvironment,
@@ -162,12 +163,14 @@ public class IcebergHiveMetadata
             NodeVersion nodeVersion,
             FilterStatsCalculatorService filterStatsCalculatorService,
             IcebergHiveTableOperationsConfig hiveTableOeprationsConfig,
-            StatisticsFileCache statisticsFileCache)
+            StatisticsFileCache statisticsFileCache,
+            IcebergConfig icebergConfig)
     {
         super(typeManager, functionResolution, rowExpressionService, commitTaskCodec, nodeVersion, filterStatsCalculatorService, statisticsFileCache);
         this.metastore = requireNonNull(metastore, "metastore is null");
         this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
         this.hiveTableOeprationsConfig = requireNonNull(hiveTableOeprationsConfig, "hiveTableOperationsConfig is null");
+        this.icebergConfig = requireNonNull(icebergConfig, "icebergConfig is null");
     }
 
     public ExtendedHiveMetastore getMetastore()
@@ -178,7 +181,7 @@ public class IcebergHiveMetadata
     @Override
     protected org.apache.iceberg.Table getRawIcebergTable(ConnectorSession session, SchemaTableName schemaTableName)
     {
-        return getHiveIcebergTable(metastore, hdfsEnvironment, hiveTableOeprationsConfig, session, schemaTableName);
+        return getHiveIcebergTable(metastore, hdfsEnvironment, hiveTableOeprationsConfig, icebergConfig, session, schemaTableName);
     }
 
     @Override
@@ -297,6 +300,7 @@ public class IcebergHiveMetadata
                 hdfsEnvironment,
                 hdfsContext,
                 hiveTableOeprationsConfig,
+                icebergConfig,
                 schemaName,
                 tableName,
                 session.getUser(),
