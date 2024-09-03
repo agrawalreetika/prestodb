@@ -64,6 +64,7 @@ import static com.facebook.presto.hive.HiveErrorCode.HIVE_INVALID_FILE_NAMES;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_UNSUPPORTED_FORMAT;
 import static com.facebook.presto.hive.HiveMetadata.shouldCreateFilesForMissingBuckets;
 import static com.facebook.presto.hive.HiveSessionProperties.getMaxInitialSplitSize;
+import static com.facebook.presto.hive.HiveSessionProperties.getMaxSplitSize;
 import static com.facebook.presto.hive.HiveSessionProperties.isFileSplittable;
 import static com.facebook.presto.hive.HiveSessionProperties.isOrderBasedExecutionEnabled;
 import static com.facebook.presto.hive.HiveSessionProperties.isSkipEmptyFilesEnabled;
@@ -93,6 +94,7 @@ import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static java.lang.Math.max;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
+import static org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MINSIZE;
 
 public class StoragePartitionLoader
         extends PartitionLoader
@@ -184,6 +186,7 @@ public class StoragePartitionLoader
             ExtendedFileSystem targetFilesystem = hdfsEnvironment.getFileSystem(hdfsContext, targetPath);
             JobConf targetJob = toJobConf(targetFilesystem.getConf());
             targetJob.setInputFormat(TextInputFormat.class);
+            targetJob.set(SPLIT_MINSIZE, Long.toString(getMaxSplitSize(session).toBytes()));
             targetInputFormat.configure(targetJob);
             FileInputFormat.setInputPaths(targetJob, targetPath);
             InputSplit[] targetSplits = targetInputFormat.getSplits(targetJob, 0);
