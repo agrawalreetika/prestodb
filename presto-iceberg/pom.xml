@@ -12,8 +12,8 @@
 
     <properties>
         <air.main.basedir>${project.parent.basedir}</air.main.basedir>
-        <dep.iceberg.version>1.5.0</dep.iceberg.version>
-        <dep.nessie.version>0.77.1</dep.nessie.version>
+        <dep.iceberg.version>manifest-cache-e2872c65f3-1</dep.iceberg.version>
+        <dep.nessie.version>0.79.0</dep.nessie.version>
     </properties>
 
     <dependencies>
@@ -242,19 +242,50 @@
 
         <!-- Iceberg -->
         <dependency>
-            <groupId>org.apache.iceberg</groupId>
+            <groupId>com.github.agrawalreetika.iceberg</groupId>
             <artifactId>iceberg-bundled-guava</artifactId>
             <version>${dep.iceberg.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.agrawalreetika.iceberg</groupId>
+            <artifactId>iceberg-common</artifactId>
+            <version>${dep.iceberg.version}</version>
+            <scope>runtime</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+            <version>2.9.3</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-presto-bundle</artifactId>
             <scope>runtime</scope>
         </dependency>
 
         <dependency>
-            <groupId>org.apache.iceberg</groupId>
+            <groupId>com.google.errorprone</groupId>
+            <artifactId>error_prone_annotations</artifactId>
+            <version>2.10.0</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.agrawalreetika.iceberg</groupId>
             <artifactId>iceberg-api</artifactId>
             <version>${dep.iceberg.version}</version>
             <exclusions>
                 <exclusion>
-                    <groupId>org.apache.iceberg</groupId>
+                    <groupId>com.github.agrawalreetika.iceberg</groupId>
                     <artifactId>iceberg-bundled-guava</artifactId>
                 </exclusion>
                 <exclusion>
@@ -265,7 +296,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.iceberg</groupId>
+            <groupId>com.github.agrawalreetika.iceberg</groupId>
             <artifactId>iceberg-core</artifactId>
             <version>${dep.iceberg.version}</version>
             <exclusions>
@@ -290,7 +321,7 @@
                     <artifactId>jackson-databind</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>org.apache.iceberg</groupId>
+                    <groupId>com.github.agrawalreetika.iceberg</groupId>
                     <artifactId>iceberg-bundled-guava</artifactId>
                 </exclusion>
                 <exclusion>
@@ -313,7 +344,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.iceberg</groupId>
+            <groupId>com.github.agrawalreetika.iceberg</groupId>
             <artifactId>iceberg-hive-metastore</artifactId>
             <version>${dep.iceberg.version}</version>
             <exclusions>
@@ -325,7 +356,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.iceberg</groupId>
+            <groupId>com.github.agrawalreetika.iceberg</groupId>
             <artifactId>iceberg-parquet</artifactId>
             <version>${dep.iceberg.version}</version>
             <exclusions>
@@ -341,7 +372,7 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.iceberg</groupId>
+            <groupId>com.github.agrawalreetika.iceberg</groupId>
             <artifactId>iceberg-nessie</artifactId>
             <version>${dep.iceberg.version}</version>
             <exclusions>
@@ -597,9 +628,9 @@
         </dependency>
 
         <dependency>
-            <groupId>org.apache.iceberg</groupId>
+            <groupId>com.github.agrawalreetika.iceberg</groupId>
             <artifactId>iceberg-core</artifactId>
-            <version>1.5.0</version>
+            <version>${dep.iceberg.version}</version>
             <classifier>tests</classifier>
             <scope>test</scope>
             <exclusions>
