@@ -151,6 +151,7 @@ public class IcebergHiveMetadata
     private final HdfsEnvironment hdfsEnvironment;
     private final DateTimeZone timeZone = DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneId.of(TimeZone.getDefault().getID())));
     private final IcebergHiveTableOperationsConfig hiveTableOeprationsConfig;
+    private final FileLengthCache fileLengthCache;
 
     private final IcebergConfig icebergConfig;
     public IcebergHiveMetadata(
@@ -164,12 +165,14 @@ public class IcebergHiveMetadata
             FilterStatsCalculatorService filterStatsCalculatorService,
             IcebergHiveTableOperationsConfig hiveTableOeprationsConfig,
             StatisticsFileCache statisticsFileCache,
+            FileLengthCache fileLengthCache,
             IcebergConfig icebergConfig)
     {
         super(typeManager, functionResolution, rowExpressionService, commitTaskCodec, nodeVersion, filterStatsCalculatorService, statisticsFileCache);
         this.metastore = requireNonNull(metastore, "metastore is null");
         this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
         this.hiveTableOeprationsConfig = requireNonNull(hiveTableOeprationsConfig, "hiveTableOperationsConfig is null");
+        this.fileLengthCache = requireNonNull(fileLengthCache, "fileLengthCache is null");
         this.icebergConfig = requireNonNull(icebergConfig, "icebergConfig is null");
     }
 
@@ -181,7 +184,7 @@ public class IcebergHiveMetadata
     @Override
     protected org.apache.iceberg.Table getRawIcebergTable(ConnectorSession session, SchemaTableName schemaTableName)
     {
-        return getHiveIcebergTable(metastore, hdfsEnvironment, hiveTableOeprationsConfig, icebergConfig, session, schemaTableName);
+        return getHiveIcebergTable(metastore, hdfsEnvironment, hiveTableOeprationsConfig, fileLengthCache, icebergConfig, session, schemaTableName);
     }
 
     @Override
@@ -301,6 +304,7 @@ public class IcebergHiveMetadata
                 hdfsContext,
                 hiveTableOeprationsConfig,
                 icebergConfig,
+                fileLengthCache,
                 schemaName,
                 tableName,
                 session.getUser(),
@@ -540,10 +544,10 @@ public class IcebergHiveMetadata
                 tableLocation,
                 true);
 
-        InputFile inputFile = new HdfsInputFile(metadataLocation, hdfsEnvironment, hdfsContext);
+        InputFile inputFile = new HdfsInputFile(metadataLocation, hdfsEnvironment, hdfsContext, fileLengthCache);
         TableMetadata tableMetadata;
         try {
-            tableMetadata = TableMetadataParser.read(new HdfsFileIO(hdfsEnvironment, hdfsContext), inputFile);
+            tableMetadata = TableMetadataParser.read(new HdfsFileIO(hdfsEnvironment, hdfsContext, fileLengthCache), inputFile);
         }
         catch (Exception e) {
             throw new PrestoException(ICEBERG_INVALID_METADATA, String.format("Unable to read metadata file %s", metadataLocation), e);

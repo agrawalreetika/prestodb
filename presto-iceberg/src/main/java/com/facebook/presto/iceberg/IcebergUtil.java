@@ -235,7 +235,7 @@ public final class IcebergUtil
         return new PrestoIcebergTableForMetricsConfig(schema, spec, properties, sortOrder);
     }
 
-    public static Table getHiveIcebergTable(ExtendedHiveMetastore metastore, HdfsEnvironment hdfsEnvironment, IcebergHiveTableOperationsConfig config, IcebergConfig icebergConfig, ConnectorSession session, SchemaTableName table)
+    public static Table getHiveIcebergTable(ExtendedHiveMetastore metastore, HdfsEnvironment hdfsEnvironment, IcebergHiveTableOperationsConfig config, FileLengthCache fileLengthCache, IcebergConfig icebergConfig, ConnectorSession session, SchemaTableName table)
     {
         HdfsContext hdfsContext = new HdfsContext(session, table.getSchemaName(), table.getTableName());
         TableOperations operations = new HiveTableOperations(
@@ -245,6 +245,7 @@ public final class IcebergUtil
                 hdfsContext,
                 config,
                 icebergConfig,
+                fileLengthCache,
                 table.getSchemaName(),
                 table.getTableName());
         return new BaseTable(operations, quotedTableName(table));

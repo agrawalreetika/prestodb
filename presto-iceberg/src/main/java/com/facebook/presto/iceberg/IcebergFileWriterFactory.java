@@ -87,6 +87,7 @@ public class IcebergFileWriterFactory
     private final NoOpOrcWriterStats orcWriterStats = NOOP_WRITER_STATS;
     private final OrcFileWriterConfig orcFileWriterConfig;
     private final DwrfEncryptionProvider dwrfEncryptionProvider;
+    private final FileLengthCache fileLengthCache;
 
     @Inject
     public IcebergFileWriterFactory(
@@ -95,7 +96,8 @@ public class IcebergFileWriterFactory
             FileFormatDataSourceStats readStats,
             NodeVersion nodeVersion,
             OrcFileWriterConfig orcFileWriterConfig,
-            HiveDwrfEncryptionProvider dwrfEncryptionProvider)
+            HiveDwrfEncryptionProvider dwrfEncryptionProvider,
+            FileLengthCache fileLengthCache)
     {
         this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
         this.typeManager = requireNonNull(typeManager, "typeManager is null");
@@ -103,6 +105,7 @@ public class IcebergFileWriterFactory
         this.nodeVersion = requireNonNull(nodeVersion, "nodeVersion is null");
         this.orcFileWriterConfig = requireNonNull(orcFileWriterConfig, "orcFileWriterConfig is null");
         this.dwrfEncryptionProvider = requireNonNull(dwrfEncryptionProvider, "DwrfEncryptionProvider is null").toDwrfEncryptionProvider();
+        this.fileLengthCache = requireNonNull(fileLengthCache, "fileLengthCache is null");
     }
 
     public IcebergFileWriter createFileWriter(
@@ -165,6 +168,7 @@ public class IcebergFileWriterFactory
                     outputPath,
                     hdfsEnvironment,
                     hdfsContext,
+                    fileLengthCache,
                     metricsConfig);
         }
         catch (IOException e) {

@@ -36,11 +36,13 @@ public class HdfsFileIO
     private final HdfsEnvironment environment;
     private final HdfsContext context;
     private SerializableMap<String, String> properties = SerializableMap.copyOf(ImmutableMap.of());
+    private final FileLengthCache fileLengthCache;
 
-    public HdfsFileIO(HdfsEnvironment environment, HdfsContext context)
+    public HdfsFileIO(HdfsEnvironment environment, HdfsContext context, FileLengthCache fileLengthCache)
     {
         this.environment = requireNonNull(environment, "environment is null");
         this.context = requireNonNull(context, "context is null");
+        this.fileLengthCache = requireNonNull(fileLengthCache, "fileLengthCache is null");
     }
 
     @Override
@@ -58,13 +60,13 @@ public class HdfsFileIO
     @Override
     public InputFile newInputFile(String path)
     {
-        return new HdfsInputFile(new Path(path), environment, context);
+        return new HdfsInputFile(new Path(path), environment, context, fileLengthCache);
     }
 
     @Override
     public OutputFile newOutputFile(String path)
     {
-        return new HdfsOutputFile(new Path(path), environment, context);
+        return new HdfsOutputFile(new Path(path), environment, context, fileLengthCache);
     }
 
     @Override

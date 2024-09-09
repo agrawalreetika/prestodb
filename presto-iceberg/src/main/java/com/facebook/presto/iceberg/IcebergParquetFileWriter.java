@@ -40,6 +40,7 @@ public class IcebergParquetFileWriter
     private final HdfsEnvironment hdfsEnvironment;
     private final HdfsContext hdfsContext;
     private final MetricsConfig metricsConfig;
+    private final FileLengthCache fileLengthCache;
 
     public IcebergParquetFileWriter(
             OutputStream outputStream,
@@ -54,6 +55,7 @@ public class IcebergParquetFileWriter
             Path outputPath,
             HdfsEnvironment hdfsEnvironment,
             HdfsContext hdfsContext,
+            FileLengthCache fileLengthCache,
             MetricsConfig metricsConfig)
     {
         super(outputStream,
@@ -69,11 +71,12 @@ public class IcebergParquetFileWriter
         this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
         this.hdfsContext = requireNonNull(hdfsContext, "hdfsContext is null");
         this.metricsConfig = requireNonNull(metricsConfig, "metricsConfig is null");
+        this.fileLengthCache = requireNonNull(fileLengthCache, "fileLengthCache is null");
     }
 
     @Override
     public Metrics getMetrics()
     {
-        return hdfsEnvironment.doAs(hdfsContext.getIdentity().getUser(), () -> ParquetUtil.fileMetrics(new HdfsInputFile(outputPath, hdfsEnvironment, hdfsContext), metricsConfig));
+        return hdfsEnvironment.doAs(hdfsContext.getIdentity().getUser(), () -> ParquetUtil.fileMetrics(new HdfsInputFile(outputPath, hdfsEnvironment, hdfsContext, fileLengthCache), metricsConfig));
     }
 }

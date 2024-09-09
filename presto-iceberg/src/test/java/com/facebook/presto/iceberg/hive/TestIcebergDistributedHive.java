@@ -15,6 +15,7 @@ package com.facebook.presto.iceberg.hive;
 
 import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
 import com.facebook.presto.hive.metastore.file.FileHiveMetastore;
+import com.facebook.presto.iceberg.FileLengthCache;
 import com.facebook.presto.iceberg.IcebergConfig;
 import com.facebook.presto.iceberg.IcebergDistributedTestBase;
 import com.facebook.presto.iceberg.IcebergHiveTableOperationsConfig;
@@ -23,6 +24,7 @@ import com.facebook.presto.metadata.CatalogManager;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.SchemaTableName;
 import com.google.common.base.Joiner;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.Table;
 import org.testng.annotations.Test;
@@ -77,6 +79,7 @@ public class TestIcebergDistributedHive
         return IcebergUtil.getHiveIcebergTable(getFileHiveMetastore(),
                 getHdfsEnvironment(),
                 new IcebergHiveTableOperationsConfig(),
+                new FileLengthCache(CacheBuilder.newBuilder().build()),
                 new IcebergConfig(),
                 getQueryRunner().getDefaultSession().toConnectorSession(connectorId),
                 SchemaTableName.valueOf("tpch." + tableName));

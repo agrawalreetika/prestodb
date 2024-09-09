@@ -36,6 +36,7 @@ import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.session.PropertyMetadata;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import io.airlift.units.DataSize;
 import org.apache.hadoop.fs.Path;
@@ -114,7 +115,7 @@ public class TestIcebergFileWriter
         this.hdfsContext = new HdfsContext(connectorSession);
         HdfsEnvironment hdfsEnvironment = IcebergDistributedTestBase.getHdfsEnvironment();
         this.icebergFileWriterFactory = new IcebergFileWriterFactory(hdfsEnvironment, typeManager,
-                new FileFormatDataSourceStats(), new NodeVersion("test"), new OrcFileWriterConfig(), HiveDwrfEncryptionProvider.NO_ENCRYPTION);
+                new FileFormatDataSourceStats(), new NodeVersion("test"), new OrcFileWriterConfig(), HiveDwrfEncryptionProvider.NO_ENCRYPTION, new FileLengthCache(CacheBuilder.newBuilder().build()));
     }
 
     @Test

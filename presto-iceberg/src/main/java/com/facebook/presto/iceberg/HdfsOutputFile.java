@@ -35,8 +35,9 @@ public class HdfsOutputFile
     private final HdfsEnvironment environment;
     private final HdfsContext context;
     private final String user;
+    private final FileLengthCache fileLengthCache;
 
-    public HdfsOutputFile(Path path, HdfsEnvironment environment, HdfsContext context)
+    public HdfsOutputFile(Path path, HdfsEnvironment environment, HdfsContext context, FileLengthCache fileLengthCache)
     {
         this.path = requireNonNull(path, "path is null");
         this.environment = requireNonNull(environment, "environment is null");
@@ -48,6 +49,7 @@ public class HdfsOutputFile
             throw new PrestoException(ICEBERG_FILESYSTEM_ERROR, "Failed to create output file: " + path.toString(), e);
         }
         this.user = context.getIdentity().getUser();
+        this.fileLengthCache = requireNonNull(fileLengthCache, "fileLengthCache is null");
     }
 
     @Override
@@ -71,6 +73,6 @@ public class HdfsOutputFile
     @Override
     public InputFile toInputFile()
     {
-        return new HdfsInputFile(path, environment, context);
+        return new HdfsInputFile(path, environment, context, fileLengthCache);
     }
 }

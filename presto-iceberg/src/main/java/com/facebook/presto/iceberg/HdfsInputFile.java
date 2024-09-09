@@ -15,6 +15,7 @@ package com.facebook.presto.iceberg;
 
 import com.facebook.presto.hive.HdfsContext;
 import com.facebook.presto.hive.HdfsEnvironment;
+import com.facebook.presto.iceberg.FileLengthCache.FileLengthCacheKey;
 import com.facebook.presto.spi.PrestoException;
 import org.apache.hadoop.fs.Path;
 import org.apache.iceberg.hadoop.HadoopInputFile;
@@ -22,6 +23,7 @@ import org.apache.iceberg.io.InputFile;
 import org.apache.iceberg.io.SeekableInputStream;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 
 import static com.facebook.presto.iceberg.IcebergErrorCode.ICEBERG_FILESYSTEM_ERROR;
 import static java.util.Objects.requireNonNull;
@@ -32,8 +34,9 @@ public class HdfsInputFile
     private final InputFile delegate;
     private final HdfsEnvironment environment;
     private final String user;
+    private final FileLengthCache fileLengthCache;
 
-    public HdfsInputFile(Path path, HdfsEnvironment environment, HdfsContext context)
+    public HdfsInputFile(Path path, HdfsEnvironment environment, HdfsContext context, FileLengthCache fileLengthCache)
     {
         requireNonNull(path, "path is null");
         this.environment = requireNonNull(environment, "environment is null");
@@ -45,12 +48,18 @@ public class HdfsInputFile
             throw new PrestoException(ICEBERG_FILESYSTEM_ERROR, "Failed to create input file: " + path, e);
         }
         this.user = context.getIdentity().getUser();
+        this.fileLengthCache = requireNonNull(fileLengthCache, "fileLengthCache is null");
     }
 
     @Override
     public long getLength()
     {
-        return environment.doAs(user, delegate::getLength);
+        try {
+            return fileLengthCache.get(new FileLengthCacheKey(delegate.location()), () -> environment.doAs(user, delegate::getLength));
+        }
+        catch (ExecutionException e) {
+            throw new PrestoException(IcebergErrorCode.ICEBERG_CACHE_WRITE_ERROR, "Failed to get file length", e);
+        }
     }
 
     @Override

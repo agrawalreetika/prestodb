@@ -109,6 +109,7 @@ public class HiveTableOperations
     private final Optional<String> location;
     private final FileIO fileIO;
     private final IcebergHiveTableOperationsConfig config;
+    private final FileLengthCache fileLengthCache;
 
     private TableMetadata currentMetadata;
     private String currentMetadataLocation;
@@ -124,14 +125,16 @@ public class HiveTableOperations
             HdfsContext hdfsContext,
             IcebergHiveTableOperationsConfig config,
             IcebergConfig icebergConfig,
+            FileLengthCache fileLengthCache,
             String database,
             String table)
     {
-        this(new HdfsFileIO(hdfsEnvironment, hdfsContext),
+        this(new HdfsFileIO(hdfsEnvironment, hdfsContext, fileLengthCache),
                 metastore,
                 metastoreContext,
                 config,
                 icebergConfig,
+                fileLengthCache,
                 database,
                 table,
                 Optional.empty(),
@@ -145,16 +148,18 @@ public class HiveTableOperations
             HdfsContext hdfsContext,
             IcebergHiveTableOperationsConfig config,
             IcebergConfig icebergConfig,
+            FileLengthCache fileLengthCache,
             String database,
             String table,
             String owner,
             String location)
     {
-        this(new HdfsFileIO(hdfsEnvironment, hdfsContext),
+        this(new HdfsFileIO(hdfsEnvironment, hdfsContext, fileLengthCache),
                 metastore,
                 metastoreContext,
                 config,
                 icebergConfig,
+                fileLengthCache,
                 database,
                 table,
                 Optional.of(requireNonNull(owner, "owner is null")),
@@ -167,6 +172,7 @@ public class HiveTableOperations
             MetastoreContext metastoreContext,
             IcebergHiveTableOperationsConfig config,
             IcebergConfig icebergConfig,
+            FileLengthCache fileLengthCache,
             String database,
             String table,
             Optional<String> owner,
@@ -181,6 +187,7 @@ public class HiveTableOperations
         this.owner = requireNonNull(owner, "owner is null");
         this.location = requireNonNull(location, "location is null");
         this.config = requireNonNull(config, "config is null");
+        this.fileLengthCache = requireNonNull(fileLengthCache, "fileLengthCache is null");
         //TODO: duration from config
         initTableLevelLockCache(TimeUnit.MINUTES.toMillis(10));
     }

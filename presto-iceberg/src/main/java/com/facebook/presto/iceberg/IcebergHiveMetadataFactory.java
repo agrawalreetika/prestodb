@@ -41,6 +41,7 @@ public class IcebergHiveMetadataFactory
     final FilterStatsCalculatorService filterStatsCalculatorService;
     final IcebergHiveTableOperationsConfig operationsConfig;
     final StatisticsFileCache statisticsFileCache;
+    final FileLengthCache fileLengthCache;
     final IcebergConfig icebergConfig;
 
     @Inject
@@ -55,6 +56,7 @@ public class IcebergHiveMetadataFactory
             FilterStatsCalculatorService filterStatsCalculatorService,
             IcebergHiveTableOperationsConfig operationsConfig,
             StatisticsFileCache statisticsFileCache,
+            FileLengthCache fileLengthCache,
             IcebergConfig icebergConfig)
     {
         this.metastore = requireNonNull(metastore, "metastore is null");
@@ -68,6 +70,7 @@ public class IcebergHiveMetadataFactory
         this.operationsConfig = requireNonNull(operationsConfig, "operationsConfig is null");
         this.statisticsFileCache = requireNonNull(statisticsFileCache, "statisticsFileCache is null");
         this.icebergConfig = requireNonNull(icebergConfig, "icebergConfig is null");
+        this.fileLengthCache = requireNonNull(fileLengthCache, "fileLengthCache is null");
     }
 
     public ConnectorMetadata create()
@@ -83,6 +86,7 @@ public class IcebergHiveMetadataFactory
                 filterStatsCalculatorService,
                 operationsConfig,
                 statisticsFileCache,
+                fileLengthCache,
                 icebergConfig);
     }
 }

@@ -37,6 +37,7 @@ import com.facebook.presto.hive.cache.HiveCachingHdfsConfiguration;
 import com.facebook.presto.hive.gcs.GcsConfigurationInitializer;
 import com.facebook.presto.hive.gcs.HiveGcsConfig;
 import com.facebook.presto.hive.gcs.HiveGcsConfigurationInitializer;
+import com.facebook.presto.iceberg.FileLengthCache.FileLengthCacheKey;
 import com.facebook.presto.iceberg.nessie.IcebergNessieConfig;
 import com.facebook.presto.iceberg.optimizer.IcebergPlanOptimizerProvider;
 import com.facebook.presto.iceberg.procedure.ExpireSnapshotsProcedure;
@@ -204,6 +205,19 @@ public class IcebergCommonModule
         CacheStatsMBean bean = new CacheStatsMBean(delegate);
         exporter.export(generatedNameOf(StatisticsFileCache.class, connectorId), bean);
         return new StatisticsFileCache(delegate);
+    }
+
+    @Singleton
+    @Provides
+    public FileLengthCache createFileLengthCache(IcebergConfig config, MBeanExporter exporter)
+    {
+        Cache<FileLengthCacheKey, Long> delegate = CacheBuilder.newBuilder()
+                .maximumSize(512 * 1024)
+                .recordStats()
+                .build();
+        CacheStatsMBean bean = new CacheStatsMBean(delegate);
+        exporter.export(generatedNameOf(FileLengthCache.class, connectorId), bean);
+        return new FileLengthCache(delegate);
     }
 
     @ForCachingHiveMetastore

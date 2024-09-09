@@ -18,6 +18,7 @@ import com.facebook.presto.hive.HiveColumnConverterProvider;
 import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
 import com.facebook.presto.hive.metastore.MetastoreContext;
 import com.facebook.presto.hive.metastore.file.FileHiveMetastore;
+import com.facebook.presto.iceberg.FileLengthCache;
 import com.facebook.presto.iceberg.HiveTableOperations;
 import com.facebook.presto.iceberg.IcebergConfig;
 import com.facebook.presto.iceberg.IcebergHiveTableOperationsConfig;
@@ -27,6 +28,7 @@ import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorId;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.SchemaTableName;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.PartitionSpec;
@@ -71,6 +73,7 @@ public class TestRemoveOrphanFilesProcedureHive
                 hdfsContext,
                 new IcebergHiveTableOperationsConfig(),
                 new IcebergConfig(),
+                new FileLengthCache(CacheBuilder.newBuilder().build()),
                 "tpch",
                 tableName,
                 session.getUser(),
@@ -93,6 +96,7 @@ public class TestRemoveOrphanFilesProcedureHive
         return IcebergUtil.getHiveIcebergTable(getFileHiveMetastore(),
                 getHdfsEnvironment(),
                 new IcebergHiveTableOperationsConfig(),
+                new FileLengthCache(CacheBuilder.newBuilder().build()),
                 new IcebergConfig(),
                 getQueryRunner().getDefaultSession().toConnectorSession(connectorId),
                 SchemaTableName.valueOf("tpch." + tableName));
