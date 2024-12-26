@@ -63,6 +63,7 @@ import static com.facebook.presto.spi.security.AccessDeniedException.denyInsertT
 import static com.facebook.presto.spi.security.AccessDeniedException.denyRenameColumn;
 import static com.facebook.presto.spi.security.AccessDeniedException.denyRenameTable;
 import static com.facebook.presto.spi.security.AccessDeniedException.denySelectColumns;
+import static com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES;
 import static com.google.common.base.Suppliers.memoizeWithExpiration;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.lang.String.format;
@@ -120,6 +121,7 @@ public class RangerBasedAccessControl
 
     private ServicePolicies getHiveServicePolicies(RangerBasedAccessControlConfig config)
     {
+        OBJECT_MAPPER.configure(FAIL_ON_UNKNOWN_PROPERTIES, false);
         URI uri = uriBuilderFrom(URI.create(config.getRangerHttpEndPoint()))
                 .appendPath(RANGER_REST_POLICY_MGR_DOWNLOAD_URL + "/" + config.getRangerHiveServiceName())
                 .build();
