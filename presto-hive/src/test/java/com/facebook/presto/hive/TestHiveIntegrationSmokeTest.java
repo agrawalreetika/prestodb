@@ -2781,6 +2781,20 @@ public class TestHiveIntegrationSmokeTest
         actualResult = computeActual("SHOW CREATE TABLE \"test_show_create_table'2\"");
         assertEquals(getOnlyElement(actualResult.getOnlyColumnAsSet()), createTableSql);
     }
+    @Test
+    public void testShowCreateSchema()
+    {
+        String createSchemaSql = "CREATE SCHEMA show_create_hive_schema";
+        assertUpdate(createSchemaSql);
+        String expectedShowCreateSchema = "CREATE SCHEMA show_create_hive_schema\n" +
+                "WITH (\n" +
+                "   location = '.*show_create_hive_schema'\n" +
+                ")";
+
+        MaterializedResult actualResult = computeActual("SHOW CREATE SCHEMA show_create_hive_schema");
+        assertThat(getOnlyElement(actualResult.getOnlyColumnAsSet()).toString().matches(expectedShowCreateSchema));
+        assertUpdate("DROP SCHEMA show_create_hive_schema");
+    }
 
     @Test
     public void testTextfileAmbiguousTimestamp()

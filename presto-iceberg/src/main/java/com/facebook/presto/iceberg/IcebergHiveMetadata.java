@@ -14,6 +14,7 @@
 package com.facebook.presto.iceberg;
 
 import com.facebook.airlift.json.JsonCodec;
+import com.facebook.presto.common.CatalogSchemaName;
 import com.facebook.presto.common.type.Type;
 import com.facebook.presto.common.type.TypeManager;
 import com.facebook.presto.hive.HdfsContext;
@@ -87,6 +88,7 @@ import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Stream;
 
+import static com.facebook.presto.hive.HiveSchemaProperties.getDatabaseProperties;
 import static com.facebook.presto.hive.HiveStatisticsUtil.createPartitionStatistics;
 import static com.facebook.presto.hive.HiveStatisticsUtil.updatePartitionStatistics;
 import static com.facebook.presto.hive.HiveUtil.decodeViewData;
@@ -206,6 +208,17 @@ public class IcebergHiveMetadata
     public List<String> listSchemaNames(ConnectorSession session)
     {
         return metastore.getAllDatabases(getMetastoreContext(session));
+    }
+
+    @Override
+    public Map<String, Object> getSchemaProperties(ConnectorSession session, CatalogSchemaName schemaName)
+    {
+        MetastoreContext metastoreContext = getMetastoreContext(session);
+        Optional<Database> database = metastore.getDatabase(metastoreContext, schemaName.getSchemaName());
+        if (database.isPresent()) {
+            return getDatabaseProperties(database.get());
+        }
+        throw new SchemaNotFoundException(schemaName.getSchemaName());
     }
 
     @Override

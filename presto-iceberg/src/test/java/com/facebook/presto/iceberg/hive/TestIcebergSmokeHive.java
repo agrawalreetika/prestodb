@@ -28,9 +28,11 @@ import com.facebook.presto.iceberg.IcebergHiveTableOperationsConfig;
 import com.facebook.presto.iceberg.IcebergUtil;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.SchemaTableName;
+import com.facebook.presto.testing.MaterializedResult;
 import com.facebook.presto.tests.DistributedQueryRunner;
 import com.google.common.collect.ImmutableSet;
 import org.apache.iceberg.Table;
+import org.testng.annotations.Test;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -38,7 +40,9 @@ import java.nio.file.Path;
 import static com.facebook.presto.hive.metastore.InMemoryCachingHiveMetastore.memoizeMetastore;
 import static com.facebook.presto.iceberg.CatalogType.HIVE;
 import static com.facebook.presto.iceberg.IcebergQueryRunner.getIcebergDataDirectoryPath;
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.lang.String.format;
+import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestIcebergSmokeHive
         extends IcebergDistributedSmokeTestBase
@@ -82,5 +86,20 @@ public class TestIcebergSmokeHive
                 new IcebergHiveTableOperationsConfig(),
                 session,
                 SchemaTableName.valueOf(schema + "." + tableName));
+    }
+
+    @Test
+    public void testShowCreateSchema()
+    {
+        String createSchemaSql = "CREATE SCHEMA show_create_iceberg_schema";
+        assertUpdate(createSchemaSql);
+        String expectedShowCreateSchema = "CREATE SCHEMA show_create_iceberg_schema\n" +
+                "WITH (\n" +
+                "   location = '.*show_create_iceberg_schema'\n" +
+                ")";
+
+        MaterializedResult actualResult = computeActual("SHOW CREATE SCHEMA show_create_iceberg_schema");
+        assertThat(getOnlyElement(actualResult.getOnlyColumnAsSet()).toString().matches(expectedShowCreateSchema));
+        assertUpdate("DROP SCHEMA show_create_iceberg_schema");
     }
 }
