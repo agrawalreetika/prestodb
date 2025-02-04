@@ -88,7 +88,7 @@ public class PrestoNativeQueryRunnerUtils
             HiveIgnoreKeyTextOutputFormat.class.getName());
     private PrestoNativeQueryRunnerUtils() {}
 
-    public static QueryRunner createQueryRunner(boolean addStorageFormatToPath, boolean isCoordinatorSidecarEnabled)
+    public static QueryRunner createQueryRunner(boolean addStorageFormatToPath, boolean isCoordinatorSidecarEnabled, boolean enableRuntimeMetricsCollection)
             throws Exception
     {
         int cacheMaxSize = 4096; // 4GB size cache
@@ -100,7 +100,8 @@ public class PrestoNativeQueryRunnerUtils
                 cacheMaxSize,
                 DEFAULT_STORAGE_FORMAT,
                 addStorageFormatToPath,
-                isCoordinatorSidecarEnabled);
+                isCoordinatorSidecarEnabled,
+                enableRuntimeMetricsCollection);
     }
 
     public static QueryRunner createQueryRunner(
@@ -110,7 +111,8 @@ public class PrestoNativeQueryRunnerUtils
             int cacheMaxSize,
             String storageFormat,
             boolean addStorageFormatToPath,
-            boolean isCoordinatorSidecarEnabled)
+            boolean isCoordinatorSidecarEnabled,
+            boolean enableRuntimeMetricsCollection)
             throws Exception
     {
         QueryRunner defaultQueryRunner = createJavaQueryRunner(dataDirectory, storageFormat, addStorageFormatToPath);
@@ -121,7 +123,8 @@ public class PrestoNativeQueryRunnerUtils
 
         defaultQueryRunner.close();
 
-        return createNativeQueryRunner(dataDirectory.get().toString(), prestoServerPath.get(), workerCount, cacheMaxSize, true, Optional.empty(), storageFormat, addStorageFormatToPath, false, isCoordinatorSidecarEnabled, false);
+        return createNativeQueryRunner(dataDirectory.get().toString(), prestoServerPath.get(), workerCount, cacheMaxSize, true, Optional.empty(),
+                storageFormat, addStorageFormatToPath, false, isCoordinatorSidecarEnabled, false, enableRuntimeMetricsCollection);
     }
 
     public static QueryRunner createJavaQueryRunner()
@@ -310,7 +313,7 @@ public class PrestoNativeQueryRunnerUtils
                 false,
                 false,
                 OptionalInt.of(workerCount.orElse(4)),
-                getExternalWorkerLauncher("iceberg", prestoServerPath, cacheMaxSize, remoteFunctionServerUds, false, false),
+                getExternalWorkerLauncher("iceberg", prestoServerPath, cacheMaxSize, remoteFunctionServerUds, false, false, false),
                 dataDirectory,
                 addStorageFormatToPath);
     }
@@ -326,7 +329,8 @@ public class PrestoNativeQueryRunnerUtils
             boolean addStorageFormatToPath,
             Boolean failOnNestedLoopJoin,
             boolean isCoordinatorSidecarEnabled,
-            boolean singleNodeExecutionEnabled)
+            boolean singleNodeExecutionEnabled,
+            boolean enableRuntimeMetricsCollection)
             throws Exception
     {
         // The property "hive.allow-drop-table" needs to be set to true because security is always "legacy" in NativeQueryRunner.
@@ -356,7 +360,7 @@ public class PrestoNativeQueryRunnerUtils
                 hiveProperties,
                 workerCount,
                 Optional.of(Paths.get(addStorageFormatToPath ? dataDirectory + "/" + storageFormat : dataDirectory)),
-                getExternalWorkerLauncher("hive", prestoServerPath, cacheMaxSize, remoteFunctionServerUds, failOnNestedLoopJoin, isCoordinatorSidecarEnabled));
+                getExternalWorkerLauncher("hive", prestoServerPath, cacheMaxSize, remoteFunctionServerUds, failOnNestedLoopJoin, isCoordinatorSidecarEnabled, enableRuntimeMetricsCollection));
     }
 
     public static QueryRunner createNativeCteQueryRunner(boolean useThrift, String storageFormat)
@@ -399,13 +403,13 @@ public class PrestoNativeQueryRunnerUtils
                 hiveProperties,
                 workerCount,
                 Optional.of(Paths.get(addStorageFormatToPath ? dataDirectory + "/" + storageFormat : dataDirectory)),
-                getExternalWorkerLauncher("hive", prestoServerPath, cacheMaxSize, Optional.empty(), false, false));
+                getExternalWorkerLauncher("hive", prestoServerPath, cacheMaxSize, Optional.empty(), false, false, false));
     }
 
     public static QueryRunner createNativeQueryRunner(String remoteFunctionServerUds)
             throws Exception
     {
-        return createNativeQueryRunner(false, DEFAULT_STORAGE_FORMAT, Optional.ofNullable(remoteFunctionServerUds), false, false, false);
+        return createNativeQueryRunner(false, DEFAULT_STORAGE_FORMAT, Optional.ofNullable(remoteFunctionServerUds), false, false, false, false);
     }
 
     public static QueryRunner createNativeQueryRunner(boolean useThrift)
@@ -417,13 +421,13 @@ public class PrestoNativeQueryRunnerUtils
     public static QueryRunner createNativeQueryRunner(boolean useThrift, boolean failOnNestedLoopJoin)
             throws Exception
     {
-        return createNativeQueryRunner(useThrift, DEFAULT_STORAGE_FORMAT, Optional.empty(), failOnNestedLoopJoin, false, false);
+        return createNativeQueryRunner(useThrift, DEFAULT_STORAGE_FORMAT, Optional.empty(), failOnNestedLoopJoin, false, false, false);
     }
 
     public static QueryRunner createNativeQueryRunner(boolean useThrift, String storageFormat)
             throws Exception
     {
-        return createNativeQueryRunner(useThrift, storageFormat, Optional.empty(), false, false, false);
+        return createNativeQueryRunner(useThrift, storageFormat, Optional.empty(), false, false, false, false);
     }
 
     public static QueryRunner createNativeQueryRunner(
@@ -432,7 +436,8 @@ public class PrestoNativeQueryRunnerUtils
             Optional<String> remoteFunctionServerUds,
             Boolean failOnNestedLoopJoin,
             boolean isCoordinatorSidecarEnabled,
-            boolean singleNodeExecutionEnabled)
+            boolean singleNodeExecutionEnabled,
+            boolean enableRuntimeMetricsCollection)
             throws Exception
     {
         int cacheMaxSize = 0;
@@ -448,7 +453,8 @@ public class PrestoNativeQueryRunnerUtils
                 true,
                 failOnNestedLoopJoin,
                 isCoordinatorSidecarEnabled,
-                singleNodeExecutionEnabled);
+                singleNodeExecutionEnabled,
+                enableRuntimeMetricsCollection);
     }
 
     // Start the remote function server. Return the UDS path used to communicate with it.
@@ -495,7 +501,7 @@ public class PrestoNativeQueryRunnerUtils
         return new NativeQueryRunnerParameters(prestoServerPath, dataDirectory, workerCount);
     }
 
-    public static Optional<BiFunction<Integer, URI, Process>> getExternalWorkerLauncher(String catalogName, String prestoServerPath, int cacheMaxSize, Optional<String> remoteFunctionServerUds, Boolean failOnNestedLoopJoin, boolean isCoordinatorSidecarEnabled)
+    public static Optional<BiFunction<Integer, URI, Process>> getExternalWorkerLauncher(String catalogName, String prestoServerPath, int cacheMaxSize, Optional<String> remoteFunctionServerUds, Boolean failOnNestedLoopJoin, boolean isCoordinatorSidecarEnabled, boolean enableRuntimeMetricsCollection)
     {
         return
                 Optional.of((workerIndex, discoveryUri) -> {
@@ -515,6 +521,11 @@ public class PrestoNativeQueryRunnerUtils
                             configProperties = format("%s%n" +
                                     "native-sidecar=true%n" +
                                     "presto.default-namespace=native.default%n", configProperties);
+                        }
+
+                        if (enableRuntimeMetricsCollection) {
+                            configProperties = format("%s%n" +
+                                    "runtime-metrics-collection-enabled=true%n", configProperties);
                         }
 
                         if (remoteFunctionServerUds.isPresent()) {
