@@ -155,7 +155,7 @@ public final class MetadataUtil
         String schemaName = session.getSchema().orElse(null);
 
         if (schema.isPresent()) {
-            List<String> parts = schema.get().getParts();
+            List<String> parts = schema.get().getOriginalParts();
             if (parts.size() > 2) {
                 throw new SemanticException(INVALID_SCHEMA_NAME, node, "Too many parts in schema name: %s", schema.get());
             }
@@ -182,7 +182,7 @@ public final class MetadataUtil
     {
         requireNonNull(session, "session is null");
         requireNonNull(name, "name is null");
-        if (name.getParts().size() > 3) {
+        if (name.getOriginalParts().size() > 3) {
             throw new PrestoException(SYNTAX_ERROR, format("Too many dots in table name: %s", name));
         }
 
