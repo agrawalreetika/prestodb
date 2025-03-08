@@ -105,7 +105,7 @@ public class QualifiedName
         return Iterables.getLast(parts);
     }
 
-    public String getOriginalSuffix()
+    public Identifier getOriginalSuffix()
     {
         return Iterables.getLast(originalParts);
     }
