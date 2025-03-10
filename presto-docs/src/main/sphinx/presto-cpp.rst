@@ -50,10 +50,15 @@ Only specific connectors are supported in the Presto C++ evaluation engine.
   For more information about Symlink tables, see `Presto, Trino, and Athena to Delta Lake integration using
   manifests <https://docs.delta.io/latest/presto-integration.html>`_.
 
+* Supports reading and writing of DWRF and PARQUET file formats, supports reading ORC file format.
+
+* TPCH connector, with ``tpch.naming=standard`` catalog property.
+
+Iceberg Table Support
+=====================
+
 * Iceberg tables are supported only for reads.
 
 * Iceberg connector supports both V1 and V2 tables, including tables with delete files.
 
-* Supports reading and writing of DWRF and PARQUET file formats, supports reading ORC file format.
-
-* TPCH connector, with ``tpch.naming=standard`` catalog property.
+For detailed information refer to :doc:`/connector/iceberg` documentation.

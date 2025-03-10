@@ -15,6 +15,10 @@ current metadata pointer for a table. This central place is called the ``Iceberg
 The Presto Iceberg connector supports different types of Iceberg Catalogs : ``HIVE``,
 ``NESSIE``, ``REST``, and ``HADOOP``.
 
+.. note::
+
+    ``HIVE``, ``NESSIE``, ``REST``, and ``HADOOP`` Iceberg catalogs are also supported in PrestoCPP.
+
 To configure the Iceberg connector, create a catalog properties file
 ``etc/catalog/iceberg.properties``. To define the catalog type, ``iceberg.catalog.type`` property
 is required along with the following contents, with the property values replaced as follows:
@@ -523,6 +527,10 @@ Property Name                                          Description              
                                                        this size will not be cached.
 ====================================================   =============================================================   ============
 
+.. note::
+
+    Manifest file caching is supported in PrestoCPP as well.
+
 Alluxio Data Cache
 ^^^^^^^^^^^^^^^^^^
 
@@ -545,6 +553,10 @@ JMX queries to get the metrics and verify the cache usage::
     SELECT * FROM jmx.current."com.facebook.alluxio:name=client.cachebytesreadcache,type=meters";
 
     SHOW TABLES FROM jmx.current like '%alluxio%';
+
+.. note::
+
+    Alluxio data caching is applicable for Java-based Presto. PrestoCPP supports Async data cache. See :ref:`async_data_caching_and_prefetching` for details.
 
 File And Stripe Footer Cache
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -576,6 +588,10 @@ The following configuration properties are required to set in the Iceberg catalo
 JMX queries to get the metrics and verify the cache usage::
 
     SELECT * FROM jmx.current."com.facebook.presto.hive:name=iceberg_parquetmetadata,type=cachestatsmbean";
+
+.. note::
+
+    File and stripe footer cache is not applicable for PrestoCPP.
 
 Metastore Cache
 ^^^^^^^^^^^^^^^
@@ -615,6 +631,10 @@ as part of a SQL query by including them in your SELECT statement.
              $data_sequence_number     |  regionkey
      ----------------------------------+------------
                   2                    | 3
+
+.. note::
+
+    Extra hidden metadata columns are supported in PrestoCPP as well.
 
 Extra Hidden Metadata Tables
 ----------------------------
@@ -796,6 +816,9 @@ example uses the earliest snapshot ID: ``2423571386296047175``
       testBranch | BRANCH | 3374797416068698476 | NULL                    | NULL                  | NULL
       testTag    | TAG    | 4686954189838128572 | 10                      | NULL                  | NULL
 
+.. note::
+
+    Extra hidden metadata tables are supported in PrestoCPP as well.
 
 Procedures
 ----------
