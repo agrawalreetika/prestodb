@@ -115,7 +115,7 @@ public class AddColumnTask
                 parameterExtractor(statement, parameters));
 
         Identifier columnIdentifier = element.getName();
-        String name = metadata.normalizeIdentifier(session, tableName.getLegacyCatalogName(), columnIdentifier.getValue(), columnIdentifier.isDelimited());
+        String name = metadata.normalizeIdentifier(session, tableName.getLegacyCatalogName(), columnIdentifier.getValue());
 
         ColumnMetadata column = ColumnMetadata.builder()
                 .setName(name)

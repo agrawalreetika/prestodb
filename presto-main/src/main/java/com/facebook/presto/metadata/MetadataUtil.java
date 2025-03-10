@@ -46,7 +46,6 @@ import static com.facebook.presto.connector.informationSchema.InformationSchemaM
 import static com.facebook.presto.spi.StandardErrorCode.SYNTAX_ERROR;
 import static com.facebook.presto.spi.security.PrincipalType.ROLE;
 import static com.facebook.presto.spi.security.PrincipalType.USER;
-import static com.facebook.presto.sql.QueryUtil.identifier;
 import static com.facebook.presto.sql.analyzer.SemanticErrorCode.CATALOG_NOT_SPECIFIED;
 import static com.facebook.presto.sql.analyzer.SemanticErrorCode.INVALID_SCHEMA_NAME;
 import static com.facebook.presto.sql.analyzer.SemanticErrorCode.MISSING_CATALOG;
@@ -103,8 +102,8 @@ public final class MetadataUtil
 
     public static SchemaTableName toSchemaTableName(QualifiedObjectName qualifiedObjectName, Metadata metadata, Session session)
     {
-        String schemaName = metadata.normalizeIdentifier(session, qualifiedObjectName.getLegacyCatalogName(), qualifiedObjectName.getSchemaName(), identifier(qualifiedObjectName.getSchemaName()).isDelimited());
-        String tableName = metadata.normalizeIdentifier(session, qualifiedObjectName.getLegacyCatalogName(), qualifiedObjectName.getObjectName(), identifier(qualifiedObjectName.getObjectName()).isDelimited());
+        String schemaName = metadata.normalizeIdentifier(session, qualifiedObjectName.getLegacyCatalogName(), qualifiedObjectName.getSchemaName());
+        String tableName = metadata.normalizeIdentifier(session, qualifiedObjectName.getLegacyCatalogName(), qualifiedObjectName.getObjectName());
         return toSchemaTableName(schemaName, tableName);
     }
 
@@ -166,7 +165,7 @@ public final class MetadataUtil
             if (catalogName == null) {
                 throw new SemanticException(CATALOG_NOT_SPECIFIED, node, "Catalog must be specified when session catalog is not set");
             }
-            schemaName = metadata.normalizeIdentifier(session, catalogName, schema.get().getOriginalSuffix().getValue(), schema.get().getOriginalSuffix().isDelimited());
+            schemaName = metadata.normalizeIdentifier(session, catalogName, schema.get().getOriginalSuffix().getValue());
         }
 
         if (catalogName == null) {
@@ -194,8 +193,8 @@ public final class MetadataUtil
         Identifier catalogName = (parts.size() > 2) ? parts.get(2) : session.getCatalog().map(Identifier::new).orElseThrow(() ->
                 new SemanticException(CATALOG_NOT_SPECIFIED, node, "Catalog must be specified when session catalog is not set"));
 
-        String schemaNameStr = metadata.normalizeIdentifier(session, catalogName.getValueLowerCase(), schemaName.getValue(), schemaName.isDelimited());
-        String objectNameStr = metadata.normalizeIdentifier(session, catalogName.getValueLowerCase(), objectName.getValue(), objectName.isDelimited());
+        String schemaNameStr = metadata.normalizeIdentifier(session, catalogName.getValueLowerCase(), schemaName.getValue());
+        String objectNameStr = metadata.normalizeIdentifier(session, catalogName.getValueLowerCase(), objectName.getValue());
 
         return new QualifiedObjectName(catalogName.getValueLowerCase(), schemaNameStr, objectNameStr);
     }
@@ -216,8 +215,8 @@ public final class MetadataUtil
             ConnectorMetadata metadata = catalogMetadata.getMetadataFor(connectorId);
 
             ConnectorTableHandle tableHandle;
-            String schemaName = metadata.normalizeIdentifier(session.toConnectorSession(connectorId), table.getSchemaName(), identifier(table.getSchemaName()).isDelimited());
-            String tableName = metadata.normalizeIdentifier(session.toConnectorSession(connectorId), table.getObjectName(), identifier(table.getObjectName()).isDelimited());
+            String schemaName = metadata.normalizeIdentifier(session.toConnectorSession(connectorId), table.getSchemaName());
+            String tableName = metadata.normalizeIdentifier(session.toConnectorSession(connectorId), table.getObjectName());
 
             tableHandle = tableVersion
                     .map(expression -> metadata.getTableHandle(session.toConnectorSession(connectorId), toSchemaTableName(schemaName, tableName), Optional.of(expression)))

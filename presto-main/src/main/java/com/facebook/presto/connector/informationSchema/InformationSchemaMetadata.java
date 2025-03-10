@@ -55,7 +55,6 @@ import static com.facebook.presto.metadata.MetadataUtil.SchemaMetadataBuilder.sc
 import static com.facebook.presto.metadata.MetadataUtil.TableMetadataBuilder.tableMetadataBuilder;
 import static com.facebook.presto.metadata.MetadataUtil.findColumnMetadata;
 import static com.facebook.presto.metadata.QualifiedTablePrefix.toQualifiedTablePrefix;
-import static com.facebook.presto.sql.QueryUtil.identifier;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Predicates.compose;
 import static com.google.common.collect.ImmutableList.toImmutableList;
@@ -294,8 +293,8 @@ public class InformationSchemaMetadata
                     .filter(objectName -> metadataResolver.getView(objectName).isPresent() || metadataResolver.getTableHandle(objectName).isPresent())
                     .map(value -> toQualifiedTablePrefix(new QualifiedObjectName(
                             value.getCatalogName(),
-                            metadata.normalizeIdentifier(session, value.getCatalogName(), value.getSchemaName(), identifier(value.getSchemaName()).isDelimited()),
-                            metadata.normalizeIdentifier(session, value.getCatalogName(), value.getObjectName(), identifier(value.getObjectName()).isDelimited()))))
+                            metadata.normalizeIdentifier(session, value.getCatalogName(), value.getSchemaName()),
+                            metadata.normalizeIdentifier(session, value.getCatalogName(), value.getObjectName()))))
                     .collect(toImmutableSet());
         }
 
@@ -306,8 +305,8 @@ public class InformationSchemaMetadata
                 .filter(objectName -> !predicate.isPresent() || predicate.get().test(asFixedValues(objectName)))
                 .map(value -> toQualifiedTablePrefix(new QualifiedObjectName(
                         value.getCatalogName(),
-                        metadata.normalizeIdentifier(session, value.getCatalogName(), value.getSchemaName(), identifier(value.getSchemaName()).isDelimited()),
-                        metadata.normalizeIdentifier(session, value.getCatalogName(), value.getObjectName(), identifier(value.getObjectName()).isDelimited()))))
+                        metadata.normalizeIdentifier(session, value.getCatalogName(), value.getSchemaName()),
+                        metadata.normalizeIdentifier(session, value.getCatalogName(), value.getObjectName()))))
                 .collect(toImmutableSet());
     }
 

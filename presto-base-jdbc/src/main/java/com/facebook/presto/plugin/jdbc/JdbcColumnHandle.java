@@ -23,7 +23,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.Optional;
 
-import static com.facebook.presto.plugin.jdbc.BaseJdbcClient.isDelimited;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
@@ -103,7 +102,7 @@ public final class JdbcColumnHandle
     public ColumnMetadata getColumnMetadata(ConnectorSession session, JdbcClient jdbcClient)
     {
         return JdbcColumnMetadata.jdbcBuilder()
-                .setName(jdbcClient.normalizeIdentifier(session, columnName, isDelimited(jdbcClient.getIdentifierQuote())))
+                .setName(jdbcClient.normalizeIdentifier(session, columnName))
                 .setType(columnType)
                 .setNullable(nullable)
                 .setComment(comment.orElse(null))

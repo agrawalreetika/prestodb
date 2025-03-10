@@ -785,10 +785,10 @@ public class ClassLoaderSafeConnectorMetadata
         }
     }
 
-    public String normalizeIdentifier(ConnectorSession session, String identifier, boolean delimited)
+    public String normalizeIdentifier(ConnectorSession session, String identifier)
     {
         try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
-            return delegate.normalizeIdentifier(session, identifier, delimited);
+            return delegate.normalizeIdentifier(session, identifier);
         }
     }
 }

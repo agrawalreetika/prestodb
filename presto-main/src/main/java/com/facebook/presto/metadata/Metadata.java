@@ -518,5 +518,5 @@ public interface Metadata
 
     void addConstraint(Session session, TableHandle tableHandle, TableConstraint<String> tableConstraint);
 
-    String normalizeIdentifier(Session session, String catalogName, String identifier, boolean delimited);
+    String normalizeIdentifier(Session session, String catalogName, String identifier);
 }

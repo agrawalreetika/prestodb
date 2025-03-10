@@ -845,7 +845,7 @@ public interface ConnectorMetadata
     /**
      * Normalize the provided SQL identifier according to connector-specific rules
      */
-    default String normalizeIdentifier(ConnectorSession session, String identifier, boolean delimited)
+    default String normalizeIdentifier(ConnectorSession session, String identifier)
     {
         return identifier.toLowerCase(ENGLISH);
     }

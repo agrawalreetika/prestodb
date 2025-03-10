@@ -120,7 +120,7 @@ public class CreateTableTask
             if (element instanceof ColumnDefinition) {
                 ColumnDefinition column = (ColumnDefinition) element;
                 String columnName = column.getName().getValue();
-                String name = metadata.normalizeIdentifier(session, tableName.getLegacyCatalogName(), columnName, column.getName().isDelimited());
+                String name = metadata.normalizeIdentifier(session, tableName.getLegacyCatalogName(), columnName);
                 Type type;
                 try {
                     type = metadata.getType(parseTypeSignature(column.getType()));

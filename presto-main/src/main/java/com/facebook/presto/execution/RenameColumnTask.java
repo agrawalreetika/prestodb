@@ -71,9 +71,9 @@ public class RenameColumnTask
         TableHandle tableHandle = tableHandleOptional.get();
 
         Identifier sourceName = statement.getSource();
-        String source = metadata.normalizeIdentifier(session, tableName.getLegacyCatalogName(), sourceName.getValue(), sourceName.isDelimited());
+        String source = metadata.normalizeIdentifier(session, tableName.getLegacyCatalogName(), sourceName.getValue());
         Identifier targetName = statement.getTarget();
-        String target = metadata.normalizeIdentifier(session, tableName.getLegacyCatalogName(), targetName.getValue(), targetName.isDelimited());
+        String target = metadata.normalizeIdentifier(session, tableName.getLegacyCatalogName(), targetName.getValue());
 
         accessControl.checkCanRenameColumn(session.getRequiredTransactionId(), session.getIdentity(), session.getAccessControlContext(), tableName);
 

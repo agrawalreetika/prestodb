@@ -148,7 +148,7 @@ public class BaseJdbcClient
     {
         try (Connection connection = connectionFactory.openConnection(identity)) {
             return listSchemas(connection).stream()
-                    .map(schemaName -> normalizeIdentifier(session, schemaName, isDelimited(identifierQuote)))
+                    .map(schemaName -> normalizeIdentifier(session, schemaName))
                     .collect(toImmutableSet());
         }
         catch (SQLException e) {
@@ -184,8 +184,8 @@ public class BaseJdbcClient
                 while (resultSet.next()) {
                     String tableSchema = getTableSchemaName(resultSet);
                     String tableName = resultSet.getString("TABLE_NAME");
-                    list.add(new SchemaTableName(normalizeIdentifier(session, tableSchema, isDelimited(identifierQuote)),
-                            normalizeIdentifier(session, tableName, isDelimited(identifierQuote))));
+                    list.add(new SchemaTableName(normalizeIdentifier(session, tableSchema),
+                            normalizeIdentifier(session, tableName)));
                 }
                 return list.build();
             }
@@ -610,7 +610,7 @@ public class BaseJdbcClient
     }
 
     @Override
-    public String normalizeIdentifier(ConnectorSession session, String identifier, boolean delimited)
+    public String normalizeIdentifier(ConnectorSession session, String identifier)
     {
         return identifier.toLowerCase(ENGLISH);
     }

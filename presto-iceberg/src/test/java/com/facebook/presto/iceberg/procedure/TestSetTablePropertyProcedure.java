@@ -39,7 +39,6 @@ import java.util.Map;
 import static com.facebook.presto.iceberg.CatalogType.HADOOP;
 import static com.facebook.presto.iceberg.IcebergQueryRunner.ICEBERG_CATALOG;
 import static com.facebook.presto.iceberg.IcebergQueryRunner.getIcebergDataDirectoryPath;
-import static com.facebook.presto.sql.QueryUtil.identifier;
 import static java.lang.String.format;
 import static org.apache.iceberg.TableProperties.SPLIT_SIZE_DEFAULT;
 import static org.testng.Assert.assertEquals;
@@ -180,8 +179,7 @@ public class TestSetTablePropertyProcedure
         CatalogManager catalogManager = getDistributedQueryRunner().getCoordinator().getCatalogManager();
         ConnectorId connectorId = catalogManager.getCatalog(ICEBERG_CATALOG).get().getConnectorId();
 
-        return metadata.normalizeIdentifier(session, connectorId.getCatalogName(),
-                name, identifier(name).isDelimited());
+        return metadata.normalizeIdentifier(session, connectorId.getCatalogName(), name);
     }
 
     private Map<String, String> getProperties()

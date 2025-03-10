@@ -99,5 +99,5 @@ public interface JdbcClient
 
     TableStatistics getTableStatistics(ConnectorSession session, JdbcTableHandle handle, List<JdbcColumnHandle> columnHandles, TupleDomain<ColumnHandle> tupleDomain);
 
-    String normalizeIdentifier(ConnectorSession session, String identifier, boolean delimited);
+    String normalizeIdentifier(ConnectorSession session, String identifier);
 }

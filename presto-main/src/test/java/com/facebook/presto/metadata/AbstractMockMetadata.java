@@ -670,7 +670,7 @@ public abstract class AbstractMockMetadata
     }
 
     @Override
-    public String normalizeIdentifier(Session session, String catalogName, String identifier, boolean delimited)
+    public String normalizeIdentifier(Session session, String catalogName, String identifier)
     {
         return identifier.toLowerCase(ENGLISH);
     }

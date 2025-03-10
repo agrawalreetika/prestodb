@@ -59,7 +59,6 @@ import static com.facebook.presto.iceberg.IcebergQueryRunner.getIcebergDataDirec
 import static com.facebook.presto.iceberg.IcebergUtil.dataLocation;
 import static com.facebook.presto.iceberg.IcebergUtil.metadataLocation;
 import static com.facebook.presto.iceberg.procedure.RegisterTableProcedure.getFileSystem;
-import static com.facebook.presto.sql.QueryUtil.identifier;
 import static com.google.common.io.Files.createTempDir;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
@@ -310,8 +309,7 @@ public abstract class TestRemoveOrphanFilesProcedureBase
         CatalogManager catalogManager = getDistributedQueryRunner().getCoordinator().getCatalogManager();
         ConnectorId connectorId = catalogManager.getCatalog(ICEBERG_CATALOG).get().getConnectorId();
 
-        return metadata.normalizeIdentifier(session, connectorId.getCatalogName(),
-                name, identifier(name).isDelimited());
+        return metadata.normalizeIdentifier(session, connectorId.getCatalogName(), name);
     }
 
     protected File getCatalogDirectory(CatalogType type)

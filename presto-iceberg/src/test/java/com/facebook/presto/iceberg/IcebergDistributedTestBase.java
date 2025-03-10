@@ -148,7 +148,6 @@ import static com.facebook.presto.iceberg.IcebergSessionProperties.DELETE_AS_JOI
 import static com.facebook.presto.iceberg.IcebergSessionProperties.PUSHDOWN_FILTER_ENABLED;
 import static com.facebook.presto.iceberg.IcebergSessionProperties.STATISTIC_SNAPSHOT_RECORD_DIFFERENCE_WEIGHT;
 import static com.facebook.presto.spi.StandardErrorCode.NOT_SUPPORTED;
-import static com.facebook.presto.sql.QueryUtil.identifier;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.anyTree;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.exchange;
 import static com.facebook.presto.sql.planner.assertions.PlanMatchPattern.filter;
@@ -2542,8 +2541,7 @@ public abstract class IcebergDistributedTestBase
         CatalogManager catalogManager = getDistributedQueryRunner().getCoordinator().getCatalogManager();
         ConnectorId connectorId = catalogManager.getCatalog(ICEBERG_CATALOG).get().getConnectorId();
 
-        return metadata.normalizeIdentifier(session, connectorId.getCatalogName(),
-                name, identifier(name).isDelimited());
+        return metadata.normalizeIdentifier(session, connectorId.getCatalogName(), name);
     }
 
     protected Map<String, String> getProperties()

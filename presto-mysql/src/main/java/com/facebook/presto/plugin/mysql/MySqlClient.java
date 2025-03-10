@@ -238,7 +238,7 @@ public class MySqlClient
     }
 
     @Override
-    public String normalizeIdentifier(ConnectorSession session, String identifier, boolean delimited)
+    public String normalizeIdentifier(ConnectorSession session, String identifier)
     {
         return identifier;
     }

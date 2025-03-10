@@ -269,8 +269,8 @@ public class JdbcMetadata
     }
 
     @Override
-    public String normalizeIdentifier(ConnectorSession session, String identifier, boolean delimited)
+    public String normalizeIdentifier(ConnectorSession session, String identifier)
     {
-        return jdbcClient.normalizeIdentifier(session, identifier, delimited);
+        return jdbcClient.normalizeIdentifier(session, identifier);
     }
 }
