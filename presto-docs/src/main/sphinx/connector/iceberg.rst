@@ -1080,6 +1080,13 @@ StatisticsFile cache invalidation procedure
 
     CALL <catalog-name>.system.invalidate_iceberg_statistics_file_cache();
 
+ManifestFile cache invalidation procedure
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Flush ManifestFile cache ::
+
+    CALL <catalog-name>.system.invalidate_iceberg_manifest_file_cache();
+
 Set Table Property
 ^^^^^^^^^^^^^^^^^^
 

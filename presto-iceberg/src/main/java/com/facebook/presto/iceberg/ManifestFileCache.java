@@ -71,4 +71,9 @@ public class ManifestFileCache
     {
         return enabled;
     }
+
+    public void invalidateManifestFileCache()
+    {
+        delegate().invalidateAll();
+    }
 }
