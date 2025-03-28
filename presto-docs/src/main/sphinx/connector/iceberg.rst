@@ -1073,6 +1073,13 @@ Examples:
 
     CALL iceberg.system.fast_forward('schema_name', 'table_name', 'branch1', 'main');
 
+StatisticsFile cache invalidation procedure
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Flush StatisticsFile cache ::
+
+    CALL <catalog-name>.system.invalidate_iceberg_statistics_file_cache();
+
 Set Table Property
 ^^^^^^^^^^^^^^^^^^
 

@@ -64,4 +64,9 @@ public class StatisticsFileCache
     {
         columnCounts.add(count);
     }
+
+    public void invalidateStatisticsFileCache()
+    {
+        delegate().invalidateAll();
+    }
 }
