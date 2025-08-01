@@ -200,6 +200,7 @@ public class QueuedStatementResource
     public Response postStatement(
             String statement,
             @DefaultValue("false") @QueryParam("binaryResults") boolean binaryResults,
+            @QueryParam("retryUrl") String retryUrl,
             @HeaderParam(X_FORWARDED_PROTO) String xForwardedProto,
             @HeaderParam(PRESTO_PREFIX_URL) String xPrestoPrefixUrl,
             @Context HttpServletRequest servletRequest,
@@ -207,6 +208,10 @@ public class QueuedStatementResource
     {
         if (isNullOrEmpty(statement)) {
             throw badRequest(BAD_REQUEST, "SQL statement is empty");
+        }
+
+        if (retryUrl != null) {
+            log.info("Retry URL to Java cluster for current query from Native cluster coordinator : {%s}", retryUrl);
         }
 
         abortIfPrefixUrlInvalid(xPrestoPrefixUrl);

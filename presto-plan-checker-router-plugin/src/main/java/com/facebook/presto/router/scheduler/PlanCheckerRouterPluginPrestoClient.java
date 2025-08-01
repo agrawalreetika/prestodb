@@ -17,10 +17,13 @@ import com.facebook.airlift.log.Logger;
 import com.facebook.airlift.stats.CounterStat;
 import com.facebook.presto.client.ClientSession;
 import com.facebook.presto.client.QueryError;
+import com.facebook.presto.client.QueryStatusInfo;
 import com.facebook.presto.client.StatementClient;
 import com.facebook.presto.sql.parser.SqlParserOptions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.units.Duration;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import org.weakref.jmx.Managed;
 import org.weakref.jmx.Nested;
@@ -40,6 +43,7 @@ import static com.facebook.presto.client.StatementClientFactory.newStatementClie
 import static com.facebook.presto.router.scheduler.HttpRequestSessionContext.getResourceEstimates;
 import static com.facebook.presto.router.scheduler.HttpRequestSessionContext.getSerializedSessionFunctions;
 import static com.google.common.base.Verify.verify;
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.util.Objects.requireNonNull;
 
 public class PlanCheckerRouterPluginPrestoClient
@@ -56,6 +60,7 @@ public class PlanCheckerRouterPluginPrestoClient
     private final URI nativeRouterURI;
     private final Duration clientRequestTimeout;
     private final boolean javaClusterFallbackEnabled;
+    private final boolean javaClusterQueryRetryEnabled;
 
     @Inject
     public PlanCheckerRouterPluginPrestoClient(PlanCheckerRouterPluginConfig planCheckerRouterPluginConfig)
@@ -69,12 +74,13 @@ public class PlanCheckerRouterPluginPrestoClient
                 requireNonNull(planCheckerRouterPluginConfig.getNativeRouterURI(), "nativeRouterURI is null");
         this.clientRequestTimeout = planCheckerRouterPluginConfig.getClientRequestTimeout();
         this.javaClusterFallbackEnabled = planCheckerRouterPluginConfig.isJavaClusterFallbackEnabled();
+        this.javaClusterQueryRetryEnabled = planCheckerRouterPluginConfig.isJavaClusterQueryRetryEnabled();
     }
 
     public Optional<URI> getCompatibleClusterURI(Map<String, List<String>> headers, String statement, Principal principal)
     {
         String newSql = ANALYZE_CALL + statement;
-        ClientSession clientSession = parseHeadersToClientSession(headers, principal);
+        ClientSession clientSession = parseHeadersToClientSession(headers, principal, getPlanCheckerClusterDestination());
         boolean isNativeCompatible = true;
         // submit initial query
         try (StatementClient client = newStatementClient(httpClient, clientSession, newSql)) {
@@ -119,11 +125,37 @@ public class PlanCheckerRouterPluginPrestoClient
         if (isNativeCompatible) {
             log.debug("Native compatible, routing to native-clusters router: [%s]", nativeRouterURI);
             nativeClusterRedirectRequests.update(1L);
+            if (javaClusterQueryRetryEnabled) {
+                return buildNativeRedirectURI(headers, principal, statement);
+            }
             return Optional.of(nativeRouterURI);
         }
         log.debug("Native incompatible, routing to java-clusters router: [%s]", javaRouterURI);
         javaClusterRedirectRequests.update(1L);
         return Optional.of(javaRouterURI);
+    }
+
+    private Optional<URI> buildNativeRedirectURI(Map<String, List<String>> headers, Principal principal, String statement)
+    {
+        ClientSession javaSession = parseHeadersToClientSession(prepareHeadersForJavaCluster(headers), principal, javaRouterURI);
+        Optional<URI> retryUri = postQueryOnJavaAndGetNextUri(javaSession, statement);
+
+        return retryUri.isPresent() ? retryUri.map(uri -> {
+            URI redirect = HttpUrl.get(nativeRouterURI)
+                    .newBuilder()
+                    .addQueryParameter("retryUrl", uri.toString())
+                    .build()
+                    .uri();
+            log.info("Redirecting to combined native URI: {}", redirect);
+            return redirect;
+        }) : Optional.of(nativeRouterURI);
+    }
+
+    private static Map<String, List<String>> prepareHeadersForJavaCluster(Map<String, List<String>> headers)
+    {
+        return headers.entrySet().stream()
+                .filter(e -> !e.getKey().equalsIgnoreCase("Host"))
+                .collect(toImmutableMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     @Managed
@@ -147,7 +179,22 @@ public class PlanCheckerRouterPluginPrestoClient
         return fallBackToJavaClusterRedirectRequests;
     }
 
-    private ClientSession parseHeadersToClientSession(Map<String, List<String>> headers, Principal principal)
+    public Optional<URI> postQueryOnJavaAndGetNextUri(ClientSession clientSession, String sql)
+    {
+        try (StatementClient client = newStatementClient(httpClient, clientSession, sql)) {
+            QueryStatusInfo statusInfo = client.currentStatusInfo();
+            if (statusInfo == null || statusInfo.getNextUri() == null) {
+                return Optional.empty();
+            }
+            return Optional.of(statusInfo.getNextUri());
+        }
+        catch (Exception e) {
+            log.error("Error submitting query: {%s}", e.getMessage(), e);
+            return Optional.empty();
+        }
+    }
+
+    private ClientSession parseHeadersToClientSession(Map<String, List<String>> headers, Principal principal, URI destinationOverride)
     {
         HttpRequestSessionContext sessionContext =
                 new HttpRequestSessionContext(
@@ -156,7 +203,7 @@ public class PlanCheckerRouterPluginPrestoClient
                         principal);
 
         return new ClientSession(
-                getPlanCheckerClusterDestination(),
+                destinationOverride,
                 sessionContext.getIdentity().getUser(),
                 sessionContext.getSource(),
                 Optional.empty(),
