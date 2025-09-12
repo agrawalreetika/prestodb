@@ -39,6 +39,7 @@ public class DruidConfig
     private String basicAuthenticationUsername;
     private String basicAuthenticationPassword;
     private String ingestionStoragePath = StandardSystemProperty.JAVA_IO_TMPDIR.value();
+    private boolean caseSensitiveNameMatchingEnabled;
 
     private boolean tlsEnabled;
     private String trustStorePath;
@@ -196,6 +197,18 @@ public class DruidConfig
     public DruidConfig setIngestionStoragePath(String ingestionStoragePath)
     {
         this.ingestionStoragePath = ingestionStoragePath;
+        return this;
+    }
+
+    public boolean isCaseSensitiveNameMatchingEnabled()
+    {
+        return caseSensitiveNameMatchingEnabled;
+    }
+
+    @Config("case-sensitive-name-matching")
+    public DruidConfig setCaseSensitiveNameMatchingEnabled(boolean caseSensitiveNameMatchingEnabled)
+    {
+        this.caseSensitiveNameMatchingEnabled = caseSensitiveNameMatchingEnabled;
         return this;
     }
 
