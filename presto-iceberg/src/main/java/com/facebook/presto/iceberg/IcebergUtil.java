@@ -19,6 +19,7 @@ import com.facebook.presto.common.GenericInternalException;
 import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.common.predicate.Domain;
 import com.facebook.presto.common.predicate.NullableValue;
+import com.facebook.presto.common.predicate.Range;
 import com.facebook.presto.common.predicate.TupleDomain;
 import com.facebook.presto.common.type.DecimalType;
 import com.facebook.presto.common.type.Decimals;
@@ -82,7 +83,6 @@ import org.apache.iceberg.io.LocationProvider;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.types.Types.NestedField;
 import org.apache.iceberg.util.LocationUtil;
-import org.apache.iceberg.util.SnapshotUtil;
 import org.apache.iceberg.view.View;
 
 import java.io.IOException;
@@ -105,6 +105,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import static com.facebook.airlift.units.DataSize.succinctBytes;
 import static com.facebook.presto.common.type.BigintType.BIGINT;
@@ -144,6 +145,7 @@ import static com.facebook.presto.iceberg.IcebergPartitionType.IDENTITY;
 import static com.facebook.presto.iceberg.IcebergSessionProperties.getCompressionCodec;
 import static com.facebook.presto.iceberg.IcebergSessionProperties.isMergeOnReadModeEnabled;
 import static com.facebook.presto.iceberg.IcebergTableProperties.getWriteDataLocation;
+import static com.facebook.presto.iceberg.IcebergTableType.INCREMENTAL;
 import static com.facebook.presto.iceberg.TypeConverter.toIcebergType;
 import static com.facebook.presto.iceberg.TypeConverter.toPrestoType;
 import static com.facebook.presto.iceberg.util.IcebergPrestoModelConverters.toIcebergTableIdentifier;
@@ -209,6 +211,7 @@ import static org.apache.iceberg.TableProperties.WRITE_LOCATION_PROVIDER_IMPL;
 import static org.apache.iceberg.TableProperties.WRITE_METADATA_LOCATION;
 import static org.apache.iceberg.types.Type.TypeID.BINARY;
 import static org.apache.iceberg.types.Type.TypeID.FIXED;
+import static org.apache.iceberg.util.SnapshotUtil.oldestAncestor;
 
 public final class IcebergUtil
 {
@@ -303,7 +306,7 @@ public final class IcebergUtil
         }
 
         if (name.getTableType() == IcebergTableType.CHANGELOG) {
-            return Optional.ofNullable(SnapshotUtil.oldestAncestor(table)).map(Snapshot::snapshotId);
+            return Optional.ofNullable(oldestAncestor(table)).map(Snapshot::snapshotId);
         }
 
         return tryGetCurrentSnapshot(table).map(Snapshot::snapshotId);
@@ -450,6 +453,78 @@ public final class IcebergUtil
         return mapWithIndex(schema.columns().stream(),
                 (column, position) -> immutableEntry(column.name(), toIntExact(position)))
                 .collect(toImmutableMap(Entry::getKey, Entry::getValue));
+    }
+
+    public static Snapshot getSnapshotBySequenceNumber(Table icebergTable, long sequenceNumber)
+    {
+        if (icebergTable == null) {
+            throw new IllegalArgumentException("icebergTable is null");
+        }
+        return StreamSupport.stream(icebergTable.snapshots().spliterator(), false)
+                .filter(s -> s.sequenceNumber() == sequenceNumber)
+                .findFirst().orElse(null);
+    }
+
+    public static void validateEndSnapshotId(Table table, long endSnapshotSequenceNumber)
+    {
+        Snapshot current = table.currentSnapshot();
+        if (!(current != null && current.sequenceNumber() >= endSnapshotSequenceNumber)) {
+            throw new PrestoException(ICEBERG_INVALID_SNAPSHOT_ID, format("Invalid end snapshot sequence number %s for table: %s. Current snapshot sequence number is %s",
+                    endSnapshotSequenceNumber, table, current != null ? current.sequenceNumber() : "null"));
+        }
+    }
+
+    public static void hasOnlyAppendOperations(Table table, Snapshot startSnapshot, Snapshot endSnapshot)
+    {
+        for (Snapshot snapshot : table.snapshots()) {
+            long seqNumber = snapshot.sequenceNumber();
+            if (seqNumber > startSnapshot.sequenceNumber() && seqNumber <= endSnapshot.sequenceNumber()) {
+                if (!snapshot.operation().equals("append")) {
+                    throw new PrestoException(NOT_SUPPORTED, format("Only append operations are supported in incremental scans. Found %s operation in snapshot %s", snapshot.operation(), snapshot.snapshotId()));
+                }
+            }
+        }
+    }
+
+    public static Snapshot getStartSnapshot(Table table)
+    {
+        if (table.currentSnapshot() == null) {
+            return null;
+        }
+        return oldestAncestor(table);
+    }
+
+    private static Snapshot validateAndFetchEndSnapshot(Table table, long seqNum)
+    {
+        validateEndSnapshotId(table, seqNum);
+        return getSnapshotBySequenceNumber(table, seqNum);
+    }
+
+    public static IcebergTableName prepareIncrementalScan(Table table, Snapshot start, IcebergTableName name, long seqNum)
+    {
+        Snapshot end = validateAndFetchEndSnapshot(table, seqNum);
+        hasOnlyAppendOperations(table, start, end);
+        return new IcebergTableName(name.getTableName(), INCREMENTAL,
+                Optional.of(start.snapshotId()), Optional.of(end.snapshotId()));
+    }
+
+    public static IcebergTableName prepareBetweenScan(Table table, IcebergTableName name, Range range)
+    {
+        long lowerSeq = ((Number) range.getLowBoundedValue()).longValue() + 1; // Between excludes the lower bound
+        long upperSeq = ((Number) range.getHighBoundedValue()).longValue();
+
+        Snapshot lower = getSnapshotBySequenceNumber(table, lowerSeq);
+        Snapshot upper = validateAndFetchEndSnapshot(table, upperSeq);
+        hasOnlyAppendOperations(table, lower, upper);
+
+        return new IcebergTableName(name.getTableName(), INCREMENTAL,
+                Optional.of(lower.snapshotId()), Optional.of(upper.snapshotId()));
+    }
+
+    public static PrestoException unsupportedPredicate()
+    {
+        return new PrestoException(NOT_SUPPORTED,
+                "Unsupported predicate for $snapshot_sequence_number; only >= constant or BETWEEN are allowed");
     }
 
     public static void validateTableMode(ConnectorSession session, org.apache.iceberg.Table table)
