@@ -110,6 +110,7 @@ import org.apache.iceberg.RowLevelOperationMode;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.SchemaParser;
 import org.apache.iceberg.Snapshot;
+import org.apache.iceberg.SnapshotRef;
 import org.apache.iceberg.SortOrder;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
@@ -606,8 +607,15 @@ public abstract class IcebergAbstractMetadata
 
     protected ConnectorInsertTableHandle beginIcebergTableInsert(ConnectorSession session, IcebergTableHandle table, Table icebergTable)
     {
+        Optional<String> branchName = table.getIcebergTableName().getBranchName();
+        if (branchName.isPresent()) {
+            String branch = branchName.get();
+            SnapshotRef branchRef = icebergTable.refs().get(branch);
+            if (branchRef == null || !branchRef.isBranch()) {
+                throw new PrestoException(NOT_FOUND, format("Branch '%s' does not exist in table %s.%s", branch, table.getSchemaName(), table.getIcebergTableName().getTableName()));
+            }
+        }
         transaction = icebergTable.newTransaction();
-
         return new IcebergInsertTableHandle(
                 table.getSchemaName(),
                 table.getIcebergTableName(),
@@ -664,7 +672,14 @@ public abstract class IcebergAbstractMetadata
                 .collect(toImmutableList());
 
         Table icebergTable = transaction.table();
-        AppendFiles appendFiles = transaction.newAppend();
+        Optional<String> branchName = writableTableHandle.getTableName().getBranchName();
+        AppendFiles appendFiles;
+        if (branchName.isPresent()) {
+            appendFiles = transaction.newAppend().toBranch(branchName.get());
+        }
+        else {
+            appendFiles = transaction.newAppend();
+        }
 
         ImmutableSet.Builder<String> writtenFiles = ImmutableSet.builder();
         commitTasks.forEach(task -> handleInsertTask(task, icebergTable, appendFiles, writtenFiles));
@@ -676,7 +691,8 @@ public abstract class IcebergAbstractMetadata
         }
         catch (ValidationException e) {
             log.error(e, "ValidationException in finishWrite");
-            throw new PrestoException(ICEBERG_COMMIT_ERROR, "Failed to commit Iceberg update to table: " + writableTableHandle.getTableName(), e);
+            String errorMessage = format("Failed to commit Iceberg update to table: %s%s", writableTableHandle.getTableName(), branchName.map(b -> " (branch: " + b + ")").orElse(""));
+            throw new PrestoException(ICEBERG_COMMIT_ERROR, errorMessage, e);
         }
 
         return Optional.of(new HiveOutputMetadata(new HiveOutputInfo(commitTasks.stream()
@@ -698,7 +714,10 @@ public abstract class IcebergAbstractMetadata
                 .collect(toImmutableList());
 
         RowDelta rowDelta = transaction.newRowDelta();
-        writableTableHandle.getTableName().getSnapshotId().map(icebergTable::snapshot).ifPresent(s -> rowDelta.validateFromSnapshot(s.snapshotId()));
+        Optional<String> branchName = writableTableHandle.getTableName().getBranchName();
+        if (branchName.isPresent()) {
+            rowDelta.toBranch(branchName.get());
+        }
         IsolationLevel isolationLevel = IsolationLevel.fromName(icebergTable.properties().getOrDefault(DELETE_ISOLATION_LEVEL, DELETE_ISOLATION_LEVEL_DEFAULT));
 
         ImmutableSet.Builder<String> writtenFiles = ImmutableSet.builder();
@@ -706,14 +725,17 @@ public abstract class IcebergAbstractMetadata
         commitTasks.forEach(task -> handleTask(task, icebergTable, rowDelta, writtenFiles, referencedDataFiles));
 
         rowDelta.validateDataFilesExist(referencedDataFiles.build());
-        if (isolationLevel == IsolationLevel.SERIALIZABLE) {
-            rowDelta.validateNoConflictingDataFiles();
-        }
+        // Skip conflict validation for branch operations to allow sequential mutations (INSERT -> UPDATE -> DELETE)
+        if (!branchName.isPresent()) {
+            if (isolationLevel == IsolationLevel.SERIALIZABLE) {
+                rowDelta.validateNoConflictingDataFiles();
+            }
 
-        // Ensure a row that is updated by this commit was not deleted by a separate commit
-        if (operationType == UPDATE_BEFORE || operationType == UPDATE_AFTER) {
-            rowDelta.validateDeletedFiles();
-            rowDelta.validateNoConflictingDeleteFiles();
+            // Ensure a row that is updated by this commit was not deleted by a separate commit
+            if (operationType == UPDATE_BEFORE || operationType == UPDATE_AFTER) {
+                rowDelta.validateDeletedFiles();
+                rowDelta.validateNoConflictingDeleteFiles();
+            }
         }
 
         try {
@@ -1236,7 +1258,7 @@ public abstract class IcebergAbstractMetadata
 
                 return new IcebergTableHandle(
                         storageTableName.getSchemaName(),
-                        new IcebergTableName(storageTableName.getTableName(), name.getTableType(), Optional.empty(), Optional.empty()),
+                        new IcebergTableName(storageTableName.getTableName(), name.getTableType(), Optional.empty(), Optional.empty(), Optional.empty()),
                         name.getSnapshotId().isPresent(),
                         tryGetLocation(storageTable),
                         tryGetProperties(storageTable),
@@ -1269,7 +1291,7 @@ public abstract class IcebergAbstractMetadata
 
         return new IcebergTableHandle(
                 tableNameToLoad.getSchemaName(),
-                new IcebergTableName(tableNameToLoad.getTableName(), name.getTableType(), tableSnapshotId, name.getChangelogEndSnapshot()),
+                new IcebergTableName(tableNameToLoad.getTableName(), name.getTableType(), tableSnapshotId, name.getBranchName(), name.getChangelogEndSnapshot()),
                 name.getSnapshotId().isPresent(),
                 tryGetLocation(table),
                 tryGetProperties(table),
@@ -1359,6 +1381,14 @@ public abstract class IcebergAbstractMetadata
         if (handle.isSnapshotSpecified()) {
             throw new PrestoException(NOT_SUPPORTED, "This connector do not allow delete data at specified snapshot");
         }
+        Optional<String> branchName = handle.getIcebergTableName().getBranchName();
+        if (branchName.isPresent()) {
+            String branch = branchName.get();
+            SnapshotRef branchRef = icebergTable.refs().get(branch);
+            if (branchRef == null || !branchRef.isBranch()) {
+                throw new PrestoException(NOT_FOUND, format("Branch '%s' does not exist in table %s.%s", branch, handle.getSchemaName(), handle.getIcebergTableName().getTableName()));
+            }
+        }
 
         int formatVersion = ((BaseTable) icebergTable).operations().current().formatVersion();
         if (formatVersion < MIN_FORMAT_VERSION_FOR_DELETE) {
@@ -1380,7 +1410,10 @@ public abstract class IcebergAbstractMetadata
         Table icebergTable = getIcebergTable(session, handle.getSchemaTableName());
 
         RowDelta rowDelta = transaction.newRowDelta();
-
+        Optional<String> branchName = handle.getIcebergTableName().getBranchName();
+        if (branchName.isPresent()) {
+            rowDelta.toBranch(branchName.get());
+        }
         List<CommitTaskData> commitTasks = fragments.stream()
                 .map(slice -> commitTaskCodec.fromJson(slice.getBytes()))
                 .collect(toImmutableList());
@@ -1619,6 +1652,14 @@ public abstract class IcebergAbstractMetadata
     {
         IcebergTableHandle handle = (IcebergTableHandle) tableHandle;
         Table icebergTable = getIcebergTable(session, handle.getSchemaTableName());
+        Optional<String> branchName = handle.getIcebergTableName().getBranchName();
+        if (branchName.isPresent()) {
+            String branch = branchName.get();
+            SnapshotRef branchRef = icebergTable.refs().get(branch);
+            if (branchRef == null || !branchRef.isBranch()) {
+                throw new PrestoException(NOT_FOUND, format("Branch '%s' does not exist in table %s.%s", branch, handle.getSchemaName(), handle.getIcebergTableName().getTableName()));
+            }
+        }
         int formatVersion = ((BaseTable) icebergTable).operations().current().formatVersion();
         if (formatVersion < MIN_FORMAT_VERSION_FOR_DELETE ||
                 !Optional.ofNullable(icebergTable.properties().get(TableProperties.UPDATE_MODE))

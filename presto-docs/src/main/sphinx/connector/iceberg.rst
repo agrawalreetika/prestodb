@@ -2237,6 +2237,78 @@ Query Iceberg table by specifying the tag name:
             20 | canada        |         2 | comment
     (3 rows)
 
+Mutating Iceberg branches
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Iceberg supports performing INSERT, UPDATE, and DELETE operations directly on branches,
+allowing you to make changes to a branch without affecting the main table or other branches.
+
+To perform mutations on a branch, use the quoted identifier syntax ``"table.branch_branchname"``.
+The quotes are required to prevent the SQL parser from interpreting the dot as a schema.table separator.
+
+**Insert into a branch:**
+
+.. code-block:: sql
+
+    -- Create a branch first
+    ALTER TABLE orders CREATE BRANCH 'audit_branch';
+    
+    -- Insert data into the branch
+    INSERT INTO "orders.branch_audit_branch" VALUES (1, 'Product A', 100.00);
+    INSERT INTO "orders.branch_audit_branch" VALUES (2, 'Product B', 200.00);
+
+**Update data in a branch:**
+
+.. code-block:: sql
+
+    -- Update specific rows in the branch
+    UPDATE "orders.branch_audit_branch" SET price = 120.00 WHERE id = 1;
+    
+    -- Update with complex expressions
+    UPDATE "orders.branch_audit_branch" 
+    SET price = price * 1.1 
+    WHERE category = 'electronics';
+
+**Delete from a branch:**
+
+.. code-block:: sql
+
+    -- Delete specific rows from the branch
+    DELETE FROM "orders.branch_audit_branch" WHERE id = 2;
+    
+    -- Delete with complex predicates
+    DELETE FROM "orders.branch_audit_branch" 
+    WHERE created_date < DATE '2024-01-01';
+
+**Verify branch isolation:**
+
+After performing mutations on a branch, you can verify that the main table remains unchanged:
+
+.. code-block:: sql
+
+    -- Query the branch to see changes
+    SELECT * FROM orders FOR SYSTEM_VERSION AS OF 'audit_branch';
+    
+    -- Query the main table (unchanged)
+    SELECT * FROM orders;
+
+**Using with schema qualification:**
+
+When needed, you can include the schema name:
+
+.. code-block:: sql
+
+    INSERT INTO "schema.orders.branch_audit" VALUES (3, 'Product C', 300.00);
+    UPDATE "schema.orders.branch_audit" SET price = 350.00 WHERE id = 3;
+    DELETE FROM "schema.orders.branch_audit" WHERE id = 3;
+
+**Important notes:**
+
+* Branch mutations require quoted identifiers (double quotes) around the table name with branch suffix
+* The branch must exist before performing mutations (create it with ``ALTER TABLE ... CREATE BRANCH``)
+* Changes are isolated to the specified branch and do not affect the main table or other branches
+* All standard SQL features work with branch mutations (WHERE clauses, column lists, INSERT from SELECT, etc.)
+
 Presto C++ Support
 ^^^^^^^^^^^^^^^^^^
 

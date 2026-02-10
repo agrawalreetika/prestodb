@@ -42,13 +42,15 @@ import static java.util.Objects.requireNonNull;
 public class IcebergTableName
 {
     private static final Pattern TABLE_PATTERN = Pattern.compile("" +
-            "(?<table>[^$@]+)" +
+            "(?<table>[^$@.]+)" +
+            "(?:\\.branch_(?<branch>[^$@]+))?" +
             "(?:@(?<ver1>[0-9]+))?" +
             "(?:\\$(?<type>[^@]+)(?:@(?<ver2>[0-9]+))?)?");
 
     private final String tableName;
     private final IcebergTableType icebergTableType;
     private final Optional<Long> snapshotId;
+    private final Optional<String> branchName;
 
     private final Optional<Long> changelogEndSnapshot;
 
@@ -59,11 +61,13 @@ public class IcebergTableName
             @JsonProperty("tableName") String tableName,
             @JsonProperty("tableType") IcebergTableType icebergTableType,
             @JsonProperty("snapshotId") Optional<Long> snapshotId,
+            @JsonProperty("branchName") Optional<String> branchName,
             @JsonProperty("changelogEndSnapshot") Optional<Long> changelogEndSnapshot)
     {
         this.tableName = requireNonNull(tableName, "tableName is null");
         this.icebergTableType = requireNonNull(icebergTableType, "tableType is null");
         this.snapshotId = requireNonNull(snapshotId, "snapshotId is null");
+        this.branchName = requireNonNull(branchName, "branchName is null");
         this.changelogEndSnapshot = requireNonNull(changelogEndSnapshot, "changelogEndSnapshot is null");
     }
 
@@ -77,6 +81,12 @@ public class IcebergTableName
     public IcebergTableType getTableType()
     {
         return icebergTableType;
+    }
+
+    @JsonProperty
+    public Optional<String> getBranchName()
+    {
+        return branchName;
     }
 
     @JsonProperty
@@ -115,6 +125,7 @@ public class IcebergTableName
         }
 
         String table = match.group("table");
+        String branch = match.group("branch");
         String typeString = match.group("type");
         String version1 = match.group("ver1");
         String version2 = match.group("ver2");
@@ -154,6 +165,6 @@ public class IcebergTableName
             throw new PrestoException(NOT_SUPPORTED, format("Invalid Iceberg table name (cannot use @ version with table type '%s'): %s", type, name));
         }
 
-        return new IcebergTableName(table, type, version, changelogEndVersion);
+        return new IcebergTableName(table, type, version, Optional.ofNullable(branch), changelogEndVersion);
     }
 }
