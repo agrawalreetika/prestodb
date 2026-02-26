@@ -94,4 +94,6 @@ public class RuntimeMetricName
     public static final String METASTORE_UPDATE_PARTITION_STATISTICS_TIME_NANOS = "metastoreUpdatePartitionStatisticsTimeNanos";
     public static final String METASTORE_UPDATE_TABLE_STATISTICS_TIME_NANOS = "metastoreUpdateTableStatisticsTimeNanos";
     public static final String CHECK_ACCESS_PERMISSIONS_TIME_NANOS = "checkAccessPermissionsTimeNanos";
+    public static final String COORDINATOR_BUFFER_DRAINED_PAGES = "coordinatorBufferDrainedPages";
+    public static final String COORDINATOR_BUFFER_DRAINED_BYTES = "coordinatorBufferDrainedBytes";
 }
