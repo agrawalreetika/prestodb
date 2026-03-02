@@ -181,6 +181,13 @@ void to_json(json& j, const IcebergColumnHandle& p) {
       "IcebergColumnHandle",
       "String",
       "defaultValue");
+  to_json_key(
+      j,
+      "initialDefaultValue",
+      p.initialDefaultValue,
+      "IcebergColumnHandle",
+      "String",
+      "initialDefaultValue");
 }
 
 void from_json(const json& j, IcebergColumnHandle& p) {
