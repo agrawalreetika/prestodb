@@ -408,13 +408,6 @@ public abstract class IcebergAbstractMetadata
             schema = metadata.schema();
         }
 
-        // Reject schema default values (initial-default / write-default)
-        for (Types.NestedField field : schema.columns()) {
-            if (field.initialDefault() != null || field.writeDefault() != null) {
-                throw new PrestoException(NOT_SUPPORTED, "Iceberg v3 column default values are not supported");
-            }
-        }
-
         // Reject Iceberg table encryption
         if (!metadata.encryptionKeys().isEmpty() || snapshot.keyId() != null || metadata.properties().containsKey("encryption.key-id")) {
             throw new PrestoException(NOT_SUPPORTED, "Iceberg table encryption is not supported");
@@ -1237,13 +1230,15 @@ public abstract class IcebergAbstractMetadata
         verify(handle.getIcebergTableName().getTableType() == DATA, "only the data table can have columns added");
         validateNoBranchSpecified(handle, "ADD COLUMN");
         Table icebergTable = getIcebergTable(session, handle.getSchemaTableName());
-        icebergTable.updateSchema().addColumn(column.getName(), columnType, column.getComment().orElse(null)).commit();
+        UpdateSchema updateSchema = icebergTable.updateSchema();
         if (column.getInitialDefaultValue().isPresent()) {
-            UpdateSchema updateSchema = icebergTable.updateSchema();
-            // This sets both initial-default and write-default in the schema
+            // Add column with default value (sets both initial-default and write-default)
             String defaultValueStr = column.getInitialDefaultValue().get();
             Literal<?> defaultLiteral = convertToIcebergLiteral(defaultValueStr, columnType);
             updateSchema.addColumn(column.getName(), columnType, defaultLiteral).commit();
+        }
+        else {
+            updateSchema.addColumn(column.getName(), columnType, column.getComment().orElse(null)).commit();
         }
         if (column.getProperties().containsKey(PARTITIONING_PROPERTY)) {
             List<String> partitioningTransform = (List<String>) column.getProperties().get(PARTITIONING_PROPERTY);
