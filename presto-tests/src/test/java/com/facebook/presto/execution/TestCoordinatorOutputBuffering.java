@@ -15,9 +15,9 @@ package com.facebook.presto.execution;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.client.StatementClient;
-import com.facebook.presto.server.BasicQueryInfo;
 import com.facebook.presto.common.RuntimeMetricName;
 import com.facebook.presto.common.RuntimeStats;
+import com.facebook.presto.server.BasicQueryInfo;
 import com.facebook.presto.testing.MaterializedResult;
 import com.facebook.presto.testing.MaterializedRow;
 import com.facebook.presto.tests.DistributedQueryRunner;

@@ -22,7 +22,6 @@ import com.facebook.presto.common.RuntimeStats;
 import com.facebook.presto.execution.StateMachine;
 import com.facebook.presto.execution.TaskId;
 import com.facebook.presto.execution.buffer.BufferState;
-import com.facebook.presto.execution.buffer.OutputBuffers;
 import com.facebook.presto.execution.buffer.SpoolingOutputBuffer;
 import com.facebook.presto.execution.buffer.SpoolingOutputBufferFactory;
 import com.facebook.presto.memory.context.SimpleLocalMemoryContext;
@@ -37,8 +36,6 @@ import org.testng.annotations.Test;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
