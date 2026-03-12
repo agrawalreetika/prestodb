@@ -499,12 +499,12 @@ class Query
                 queryResults.getUpdateType(),
                 queryResults.getUpdateCount());
     }
-
     private SerializedPage pollNextPage()
     {
-        return coordinatorResultBuffer
-                .map(CoordinatorResultBuffer::pollPage)
-                .orElseGet(exchangeClient::pollPage);
+        if (coordinatorResultBuffer.isPresent()) {
+            return coordinatorResultBuffer.get().pollPage();
+        }
+        return exchangeClient.pollPage();
     }
 
     private synchronized QueryResults getNextResult(long token, UriInfo uriInfo, String scheme, DataSize targetResultSize, boolean binaryResults)
