@@ -211,6 +211,7 @@ import static com.facebook.presto.iceberg.IcebergUtil.getColumns;
 import static com.facebook.presto.iceberg.IcebergUtil.getColumnsForWrite;
 import static com.facebook.presto.iceberg.IcebergUtil.getDeleteMode;
 import static com.facebook.presto.iceberg.IcebergUtil.getFileFormat;
+import static com.facebook.presto.iceberg.IcebergUtil.getInitialDefaultValue;
 import static com.facebook.presto.iceberg.IcebergUtil.getPartitionFields;
 import static com.facebook.presto.iceberg.IcebergUtil.getPartitionKeyColumnHandles;
 import static com.facebook.presto.iceberg.IcebergUtil.getPartitionSpecsIncludingValidData;
@@ -1220,7 +1221,8 @@ public abstract class IcebergAbstractMetadata
     @Override
     public void addColumn(ConnectorSession session, ConnectorTableHandle tableHandle, ColumnMetadata column)
     {
-        if (!column.isNullable() && !column.getInitialDefaultValue().isPresent()) {
+        Optional<String> initialDefaultValue = getInitialDefaultValue(column);
+        if (!column.isNullable() && !initialDefaultValue.isPresent()) {
             throw new PrestoException(NOT_SUPPORTED, "This connector does not support add column with non null without a default value");
         }
 
@@ -1231,9 +1233,9 @@ public abstract class IcebergAbstractMetadata
         validateNoBranchSpecified(handle, "ADD COLUMN");
         Table icebergTable = getIcebergTable(session, handle.getSchemaTableName());
         UpdateSchema updateSchema = icebergTable.updateSchema();
-        if (column.getInitialDefaultValue().isPresent()) {
+        if (initialDefaultValue.isPresent()) {
             // Add column with default value (sets both initial-default and write-default)
-            String defaultValueStr = column.getInitialDefaultValue().get();
+            String defaultValueStr = initialDefaultValue.get();
             Literal<?> defaultLiteral = convertToIcebergLiteral(defaultValueStr, columnType);
             updateSchema.addColumn(column.getName(), columnType, defaultLiteral).commit();
         }

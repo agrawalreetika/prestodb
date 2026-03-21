@@ -27,8 +27,6 @@ import static java.util.Objects.requireNonNull;
 
 public class ColumnMetadata
 {
-    public static final String INITIAL_DEFAULT_VALUE_PROPERTY = "initial_default_value";
-
     private final String name;
     private final Type type;
     private final boolean nullable;
@@ -90,12 +88,6 @@ public class ColumnMetadata
     public Map<String, Object> getProperties()
     {
         return properties;
-    }
-
-    public Optional<String> getInitialDefaultValue()
-    {
-        Object value = properties.get(INITIAL_DEFAULT_VALUE_PROPERTY);
-        return value != null ? Optional.of(value.toString()) : Optional.empty();
     }
 
     public Builder toBuilder()

@@ -39,6 +39,7 @@ import com.facebook.presto.hive.metastore.Column;
 import com.facebook.presto.hive.metastore.ExtendedHiveMetastore;
 import com.facebook.presto.hive.metastore.MetastoreContext;
 import com.facebook.presto.spi.ColumnHandle;
+import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.ConnectorTableHandle;
 import com.facebook.presto.spi.ConnectorTableMetadata;
@@ -236,7 +237,22 @@ public final class IcebergUtil
     public static final int REAL_NEGATIVE_ZERO = 0x80000000;
     public static final int REAL_NEGATIVE_INFINITE = 0xff800000;
 
+    public static final String DEFAULT_VALUE_PROPERTY = "default_value";
+
     protected static final String VIEW_OWNER = "view_owner";
+
+    /**
+     * Retrieves the initial-default value from a ColumnMetadata's properties map.
+     * This value is used during reads for rows written before the column existed.
+     *
+     * @param column the ColumnMetadata to extract the initial-default from
+     * @return Optional containing the initial-default value as a String, or empty if not set
+     */
+    public static Optional<String> getInitialDefaultValue(ColumnMetadata column)
+    {
+        Object value = column.getProperties().get(DEFAULT_VALUE_PROPERTY);
+        return value != null ? Optional.of(value.toString()) : Optional.empty();
+    }
 
     private IcebergUtil() {}
 

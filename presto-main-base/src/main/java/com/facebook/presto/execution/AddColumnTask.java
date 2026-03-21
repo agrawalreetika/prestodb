@@ -122,10 +122,8 @@ public class AddColumnTask
         if (element.getDefaultExpression().isPresent()) {
             Expression defaultExpr = element.getDefaultExpression().get();
             // Store the default expression as a string in column properties
-            // The connector will parse and use this during schema evolution
             Map<String, Object> updatedProperties = new java.util.HashMap<>(columnProperties);
-            updatedProperties.put(com.facebook.presto.spi.ColumnMetadata.INITIAL_DEFAULT_VALUE_PROPERTY,
-                    defaultExpr.toString());
+            updatedProperties.put("default_value", defaultExpr.toString());
             columnProperties = updatedProperties;
         }
 
