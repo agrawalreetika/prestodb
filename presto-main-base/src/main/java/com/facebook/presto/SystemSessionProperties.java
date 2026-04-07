@@ -381,6 +381,7 @@ public final class SystemSessionProperties
     public static final String SKIP_PUSHDOWN_THROUGH_EXCHANGE_FOR_REMOTE_PROJECTION = "skip_pushdown_through_exchange_for_remote_projection";
     public static final String REMOTE_FUNCTION_NAMES_FOR_FIXED_PARALLELISM = "remote_function_names_for_fixed_parallelism";
     public static final String REMOTE_FUNCTION_FIXED_PARALLELISM_TASK_COUNT = "remote_function_fixed_parallelism_task_count";
+    public static final String PLANNER_FORCE_CPU = "planner_force_cpu";
 
     // TODO: Native execution related session properties that are temporarily put here. They will be relocated in the future.
     public static final String NATIVE_AGGREGATION_SPILL_ALL = "native_aggregation_spill_all";
@@ -2222,6 +2223,11 @@ public final class SystemSessionProperties
                         "Merge multiple max_by or min_by aggregations with the same comparison key into a single aggregation with ROW argument",
                         featuresConfig.isMergeMaxByMinByAggregationsEnabled(),
                         false),
+                booleanProperty(
+                        PLANNER_FORCE_CPU,
+                        "Force query execution on CPU workers instead of GPU workers",
+                        featuresConfig.isPlannerForceCpuEnabledByDefault(),
+                        false),
                 stringProperty(
                         TRY_FUNCTION_CATCHABLE_ERRORS,
                         "Comma-separated list of error code names that TRY function should catch (such as 'GENERIC_INTERNAL_ERROR,INVALID_ARGUMENTS')",
@@ -2250,6 +2256,11 @@ public final class SystemSessionProperties
 
     public static boolean isCoordinatorOutputBufferingEnabled(Session session)
     {
+        // For GPU queries, force enable coordinator output buffering to enable retries.
+        // Preventing partial result exposure to clients is critical for safe hardware fallback.
+        if (!isPlannerForceCpu(session)) {
+            return true;
+        }
         return session.getSystemProperty(COORDINATOR_OUTPUT_BUFFERING_ENABLED, Boolean.class);
     }
 
@@ -3813,5 +3824,10 @@ public final class SystemSessionProperties
     public static boolean isAlwaysAnalyzeCreateTableQueryEnabled(Session session)
     {
         return session.getSystemProperty(ALWAYS_ANALYZE_CREATE_TABLE_QUERY_ENABLED, Boolean.class);
+    }
+
+    public static boolean isPlannerForceCpu(Session session)
+    {
+        return session.getSystemProperty(PLANNER_FORCE_CPU, Boolean.class);
     }
 }

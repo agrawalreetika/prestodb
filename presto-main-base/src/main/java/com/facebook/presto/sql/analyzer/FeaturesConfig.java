@@ -225,6 +225,7 @@ public class FeaturesConfig
     private String spoolingOutputBufferTempStorage = "local";
 
     private boolean coordinatorOutputBufferingEnabled;
+    private boolean plannerForceCpuEnabledByDefault = true;
 
     private String warnOnNoTableLayoutFilter = "";
 
@@ -1311,6 +1312,19 @@ public class FeaturesConfig
     public FeaturesConfig setTreatLowConfidenceZeroEstimationAsUnknownEnabled(boolean treatLowConfidenceZeroEstimationAsUnknownEnabled)
     {
         this.treatLowConfidenceZeroEstimationAsUnknownEnabled = treatLowConfidenceZeroEstimationAsUnknownEnabled;
+        return this;
+    }
+
+    public boolean isPlannerForceCpuEnabledByDefault()
+    {
+        return plannerForceCpuEnabledByDefault;
+    }
+
+    @Config("planner-force-cpu-enabled-by-default")
+    @ConfigDescription("Default value for planner_force_cpu session property. Set to false in mixed or GPU-enabled clusters when GPU-first execution is the default.")
+    public FeaturesConfig setPlannerForceCpuEnabledByDefault(boolean plannerForceCpuEnabledByDefault)
+    {
+        this.plannerForceCpuEnabledByDefault = plannerForceCpuEnabledByDefault;
         return this;
     }
 

@@ -20,6 +20,8 @@ import com.facebook.airlift.units.Duration;
 import com.facebook.presto.client.QueryError;
 import com.facebook.presto.client.QueryResults;
 import com.facebook.presto.common.ErrorCode;
+import com.facebook.presto.common.RuntimeStats;
+import com.facebook.presto.common.transaction.TransactionId;
 import com.facebook.presto.dispatcher.DispatchExecutor;
 import com.facebook.presto.dispatcher.DispatchInfo;
 import com.facebook.presto.dispatcher.DispatchManager;
@@ -31,8 +33,15 @@ import com.facebook.presto.server.ServerConfig;
 import com.facebook.presto.server.SessionContext;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.QueryId;
+import com.facebook.presto.spi.function.SqlFunctionId;
+import com.facebook.presto.spi.function.SqlInvokedFunction;
+import com.facebook.presto.spi.security.AuthorizedIdentity;
+import com.facebook.presto.spi.security.Identity;
+import com.facebook.presto.spi.session.ResourceEstimates;
+import com.facebook.presto.spi.tracing.Tracer;
 import com.facebook.presto.sql.parser.SqlParserOptions;
 import com.facebook.presto.tracing.TracerProviderManager;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -65,10 +74,13 @@ import org.weakref.jmx.Nested;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.security.cert.X509Certificate;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -88,6 +100,10 @@ import static com.facebook.presto.server.protocol.QueryResourceUtil.getQueuedUri
 import static com.facebook.presto.server.protocol.QueryResourceUtil.getScheme;
 import static com.facebook.presto.server.security.RoleType.USER;
 import static com.facebook.presto.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
+import static com.facebook.presto.spi.StandardErrorCode.GPU_DEVICE_LOST;
+import static com.facebook.presto.spi.StandardErrorCode.GPU_DRIVER_ERROR;
+import static com.facebook.presto.spi.StandardErrorCode.GPU_KERNEL_TIMEOUT;
+import static com.facebook.presto.spi.StandardErrorCode.GPU_OOM_FAULT;
 import static com.facebook.presto.spi.StandardErrorCode.RETRY_QUERY_NOT_FOUND;
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -372,9 +388,16 @@ public class QueuedStatementResource
         }
 
         int retryCount = failedQuery.getRetryCount() + 1;
+        SessionContext sessionContext = failedQuery.getSessionContext();
+        if (dispatchManager.isQueryPresent(queryId)) {
+            ExecutionFailureInfo failureInfo = dispatchManager.getQueryInfo(queryId).getFailureInfo();
+            if (failureInfo != null && isGpuTransientFailure(failureInfo.getErrorCode())) {
+                sessionContext = createCpuRetrySessionContext(sessionContext);
+            }
+        }
         Query query = new Query(
                 "-- retry query " + queryId + "; attempt: " + retryCount + "\n" + failedQuery.getQuery(),
-                failedQuery.getSessionContext(),
+                sessionContext,
                 dispatchManager,
                 executingQueryResponseProvider,
                 retryCount);
@@ -824,6 +847,178 @@ public class QueuedStatementResource
                     errorCode.isRetriable(),
                     executionFailureInfo.getErrorLocation(),
                     executionFailureInfo.toFailureInfo());
+        }
+    }
+
+    private static final Set<Integer> GPU_TRANSIENT_ERROR_CODES = ImmutableSet.of(
+            GPU_OOM_FAULT.toErrorCode().getCode(),
+            GPU_DEVICE_LOST.toErrorCode().getCode(),
+            GPU_KERNEL_TIMEOUT.toErrorCode().getCode(),
+            GPU_DRIVER_ERROR.toErrorCode().getCode());
+
+    private static boolean isGpuTransientFailure(ErrorCode errorCode)
+    {
+        return errorCode != null && GPU_TRANSIENT_ERROR_CODES.contains(errorCode.getCode());
+    }
+
+    private static SessionContext createCpuRetrySessionContext(SessionContext originalContext)
+    {
+        return new SessionContextWrapper(
+                originalContext,
+                ImmutableMap.<String, String>builder()
+                        .putAll(originalContext.getSystemProperties())
+                        .put("planner_force_cpu", "true")
+                        .build());
+    }
+
+    private static class SessionContextWrapper
+            implements SessionContext
+    {
+        private final SessionContext delegate;
+        private final Map<String, String> systemProperties;
+
+        private SessionContextWrapper(SessionContext delegate, Map<String, String> systemProperties)
+        {
+            this.delegate = requireNonNull(delegate, "delegate is null");
+            this.systemProperties = ImmutableMap.copyOf(requireNonNull(systemProperties, "systemProperties is null"));
+        }
+
+        @Override
+        public Identity getIdentity()
+        {
+            return delegate.getIdentity();
+        }
+
+        @Override
+        public Optional<AuthorizedIdentity> getAuthorizedIdentity()
+        {
+            return delegate.getAuthorizedIdentity();
+        }
+
+        @Override
+        public List<X509Certificate> getCertificates()
+        {
+            return delegate.getCertificates();
+        }
+
+        @Override
+        public String getCatalog()
+        {
+            return delegate.getCatalog();
+        }
+
+        @Override
+        public String getSchema()
+        {
+            return delegate.getSchema();
+        }
+
+        @Override
+        public String getSqlText()
+        {
+            return delegate.getSqlText();
+        }
+
+        @Override
+        public String getSource()
+        {
+            return delegate.getSource();
+        }
+
+        @Override
+        public String getRemoteUserAddress()
+        {
+            return delegate.getRemoteUserAddress();
+        }
+
+        @Override
+        public String getUserAgent()
+        {
+            return delegate.getUserAgent();
+        }
+
+        @Override
+        public String getClientInfo()
+        {
+            return delegate.getClientInfo();
+        }
+
+        @Override
+        public Set<String> getClientTags()
+        {
+            return delegate.getClientTags();
+        }
+
+        @Override
+        public ResourceEstimates getResourceEstimates()
+        {
+            return delegate.getResourceEstimates();
+        }
+
+        @Override
+        public String getTimeZoneId()
+        {
+            return delegate.getTimeZoneId();
+        }
+
+        @Override
+        public String getLanguage()
+        {
+            return delegate.getLanguage();
+        }
+
+        @Override
+        public Optional<Tracer> getTracer()
+        {
+            return delegate.getTracer();
+        }
+
+        @Override
+        public Map<String, String> getSystemProperties()
+        {
+            return systemProperties;
+        }
+
+        @Override
+        public Map<String, Map<String, String>> getCatalogSessionProperties()
+        {
+            return delegate.getCatalogSessionProperties();
+        }
+
+        @Override
+        public Map<String, String> getPreparedStatements()
+        {
+            return delegate.getPreparedStatements();
+        }
+
+        @Override
+        public Optional<TransactionId> getTransactionId()
+        {
+            return delegate.getTransactionId();
+        }
+
+        @Override
+        public Optional<String> getTraceToken()
+        {
+            return delegate.getTraceToken();
+        }
+
+        @Override
+        public boolean supportClientTransaction()
+        {
+            return delegate.supportClientTransaction();
+        }
+
+        @Override
+        public Map<SqlFunctionId, SqlInvokedFunction> getSessionFunctions()
+        {
+            return delegate.getSessionFunctions();
+        }
+
+        @Override
+        public RuntimeStats getRuntimeStats()
+        {
+            return delegate.getRuntimeStats();
         }
     }
 }
