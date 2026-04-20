@@ -2441,8 +2441,12 @@ class StatementAnalyzer
                     return VersionOperator.EQUAL;
                 case LESS_THAN:
                     return VersionOperator.LESS_THAN;
+                case BETWEEN:
+                    return VersionOperator.BETWEEN;
+                case FROM_TO:
+                    return VersionOperator.FROM_TO;
             }
-            throw new SemanticException(NOT_SUPPORTED, "Table version operator %s not supported." + operator);
+            throw new SemanticException(NOT_SUPPORTED, "Table version operator %s not supported.", operator);
         }
 
         private VersionType toVersionType(TableVersionType type)
@@ -2484,7 +2488,41 @@ class StatementAnalyzer
                 }
             }
 
-            ConnectorTableVersion tableVersion = new ConnectorTableVersion(toVersionType(tableVersionType), toVersionOperator(tableVersionOperator), stateExprType, evalStateExpr);
+            ConnectorTableVersion tableVersion;
+            if (tableVersionOperator == TableVersionOperator.BETWEEN || tableVersionOperator == TableVersionOperator.FROM_TO) {
+                Optional<Expression> endExprOpt = table.getTableVersionExpression().get().getEndStateExpression();
+                if (!endExprOpt.isPresent()) {
+                    throw new SemanticException(MISSING_ATTRIBUTE, table, "End expression is required for BETWEEN/FROM_TO operators");
+                }
+                Expression endExpr = endExprOpt.get();
+                ExpressionAnalysis endExpressionAnalysis = analyzeExpression(endExpr, scope.get());
+                analysis.recordSubqueries(table, endExpressionAnalysis);
+                Type endExprType = endExpressionAnalysis.getType(endExpr);
+                if (endExprType == UNKNOWN) {
+                    throw new PrestoException(StandardErrorCode.INVALID_ARGUMENTS, format("Table version end expression cannot be NULL for %s", name.toString()));
+                }
+                Object evalEndExpr = evaluateConstantExpression(endExpr, endExprType, metadata, session, analysis.getParameters());
+                // Validate end expression type matches start expression type constraints
+                if (tableVersionType == TIMESTAMP) {
+                    if (!(endExprType instanceof TimestampWithTimeZoneType || endExprType instanceof TimestampType
+                            || endExprType instanceof BigintType || endExprType instanceof VarcharType)) {
+                        throw new SemanticException(TYPE_MISMATCH, endExpr,
+                                "Type %s is invalid. Supported table version end expression type is Timestamp, Timestamp with Time Zone, BIGINT, or VARCHAR.",
+                                endExprType.getDisplayName());
+                    }
+                }
+                if (tableVersionType == VERSION) {
+                    if (!(endExprType instanceof BigintType || endExprType instanceof VarcharType)) {
+                        throw new SemanticException(TYPE_MISMATCH, endExpr,
+                                "Type %s is invalid. Supported table version end expression type is BIGINT or VARCHAR",
+                                endExprType.getDisplayName());
+                    }
+                }
+                tableVersion = new ConnectorTableVersion(toVersionType(tableVersionType), toVersionOperator(tableVersionOperator), stateExprType, evalStateExpr, evalEndExpr);
+            }
+            else {
+                tableVersion = new ConnectorTableVersion(toVersionType(tableVersionType), toVersionOperator(tableVersionOperator), stateExprType, evalStateExpr);
+            }
             return metadata.getHandleVersion(session, name, Optional.of(tableVersion));
         }
 

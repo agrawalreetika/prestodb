@@ -623,6 +623,8 @@ qualifiedName
 
 tableVersionExpression
     : FOR tableVersionType=(SYSTEM_TIME | SYSTEM_VERSION | TIMESTAMP | VERSION) tableVersionState valueExpression          #tableVersion
+    | FOR tableVersionType=(SYSTEM_TIME | SYSTEM_VERSION | TIMESTAMP | VERSION) BETWEEN startValue=valueExpression AND endValue=valueExpression    #tableVersionRange
+    | FOR tableVersionType=(SYSTEM_TIME | SYSTEM_VERSION | TIMESTAMP | VERSION) FROM startValue=valueExpression TO endValue=valueExpression        #tableVersionRange
     ;
 
 tableVersionState

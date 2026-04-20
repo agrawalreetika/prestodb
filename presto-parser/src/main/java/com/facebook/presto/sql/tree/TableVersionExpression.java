@@ -33,57 +33,84 @@ public class TableVersionExpression
     public enum TableVersionOperator
     {
         EQUAL,
-        LESS_THAN
+        LESS_THAN,
+        BETWEEN,
+        FROM_TO
     }
     private final Expression stateExpression;
+    private final Expression endStateExpression;  // For range queries (BETWEEN/FROM_TO)
     private final TableVersionType type;
     private final TableVersionOperator operator;
 
     public TableVersionExpression(TableVersionType type, TableVersionOperator operator, Expression value)
     {
-        this(Optional.empty(), type, operator, value);
+        this(Optional.empty(), type, operator, value, null);
     }
 
     public TableVersionExpression(NodeLocation location, TableVersionType type, TableVersionOperator operator, Expression value)
     {
-        this(Optional.of(location), type, operator, value);
+        this(Optional.of(location), type, operator, value, null);
     }
 
-    private TableVersionExpression(Optional<NodeLocation> location, TableVersionType type, TableVersionOperator operator, Expression value)
+    public TableVersionExpression(NodeLocation location, TableVersionType type, TableVersionOperator operator, Expression startValue, Expression endValue)
+    {
+        this(Optional.of(location), type, operator, startValue, endValue);
+    }
+
+    private TableVersionExpression(Optional<NodeLocation> location, TableVersionType type, TableVersionOperator operator, Expression value, Expression endValue)
     {
         super(location);
         requireNonNull(value, "value is null");
         requireNonNull(operator, "operator is null");
         requireNonNull(type, "type is null");
+        if ((operator == TableVersionOperator.BETWEEN || operator == TableVersionOperator.FROM_TO) && endValue == null) {
+            throw new IllegalArgumentException("endValue is required for BETWEEN and FROM_TO operators");
+        }
 
         this.stateExpression = value;
+        this.endStateExpression = endValue;
         this.operator = operator;
         this.type = type;
     }
 
     public static TableVersionExpression timestampExpression(NodeLocation location, TableVersionOperator operator, Expression value)
     {
-        return new TableVersionExpression(Optional.of(location), TableVersionType.TIMESTAMP, operator, value);
+        return new TableVersionExpression(Optional.of(location), TableVersionType.TIMESTAMP, operator, value, null);
     }
 
     public static TableVersionExpression versionExpression(NodeLocation location, TableVersionOperator operator, Expression value)
     {
-        return new TableVersionExpression(Optional.of(location), TableVersionType.VERSION, operator, value);
+        return new TableVersionExpression(Optional.of(location), TableVersionType.VERSION, operator, value, null);
     }
 
     public static TableVersionExpression timestampExpression(TableVersionOperator operator, Expression value)
     {
-        return new TableVersionExpression(Optional.empty(), TableVersionType.TIMESTAMP, operator, value);
+        return new TableVersionExpression(Optional.empty(), TableVersionType.TIMESTAMP, operator, value, null);
     }
 
     public static TableVersionExpression versionExpression(TableVersionOperator operator, Expression value)
     {
-        return new TableVersionExpression(Optional.empty(), TableVersionType.VERSION, operator, value);
+        return new TableVersionExpression(Optional.empty(), TableVersionType.VERSION, operator, value, null);
+    }
+
+    public static TableVersionExpression timestampRangeExpression(NodeLocation location, Expression startValue, Expression endValue)
+    {
+        return new TableVersionExpression(location, TableVersionType.TIMESTAMP, TableVersionOperator.BETWEEN, startValue, endValue);
+    }
+
+    public static TableVersionExpression versionRangeExpression(NodeLocation location, Expression startValue, Expression endValue)
+    {
+        return new TableVersionExpression(location, TableVersionType.VERSION, TableVersionOperator.BETWEEN, startValue, endValue);
     }
 
     public Expression getStateExpression()
     {
         return stateExpression;
+    }
+
+    public Optional<Expression> getEndStateExpression()
+    {
+        return Optional.ofNullable(endStateExpression);
     }
 
     public TableVersionType getTableVersionType()

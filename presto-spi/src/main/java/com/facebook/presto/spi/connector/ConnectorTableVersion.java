@@ -27,23 +27,35 @@ public class ConnectorTableVersion
     public enum VersionOperator
     {
         EQUAL,
-        LESS_THAN
+        LESS_THAN,
+        BETWEEN,
+        FROM_TO
     }
     private final VersionType versionType;
     private final VersionOperator versionOperator;
     private final Type versionExpressionType;
     private final Object tableVersion;
+    private final Object endTableVersion;
 
     public ConnectorTableVersion(VersionType versionType, VersionOperator versionOperator, Type versionExpressionType, Object tableVersion)
+    {
+        this(versionType, versionOperator, versionExpressionType, tableVersion, null);
+    }
+
+    public ConnectorTableVersion(VersionType versionType, VersionOperator versionOperator, Type versionExpressionType, Object tableVersion, Object endTableVersion)
     {
         requireNonNull(versionType, "versionType is null");
         requireNonNull(versionOperator, "versionOperator is null");
         requireNonNull(versionExpressionType, "versionExpressionType is null");
         requireNonNull(tableVersion, "tableVersion is null");
+        if ((versionOperator == VersionOperator.BETWEEN || versionOperator == VersionOperator.FROM_TO) && endTableVersion == null) {
+            throw new IllegalArgumentException("endTableVersion is required for BETWEEN and FROM_TO operators");
+        }
         this.versionType = versionType;
         this.versionOperator = versionOperator;
         this.versionExpressionType = versionExpressionType;
         this.tableVersion = tableVersion;
+        this.endTableVersion = endTableVersion;
     }
 
     public VersionType getVersionType()
@@ -66,14 +78,27 @@ public class ConnectorTableVersion
         return tableVersion;
     }
 
+    public Object getEndTableVersion()
+    {
+        return endTableVersion;
+    }
+
+    public boolean isRangeQuery()
+    {
+        return versionOperator == VersionOperator.BETWEEN || versionOperator == VersionOperator.FROM_TO;
+    }
+
     @Override
     public String toString()
     {
-        return new StringBuilder("ConnectorTableVersion{")
+        StringBuilder sb = new StringBuilder("ConnectorTableVersion{")
                 .append("tableVersionType=").append(versionType)
+                .append(", versionOperator=").append(versionOperator)
                 .append(", versionExpressionType=").append(versionExpressionType)
-                .append(", tableVersion=").append(tableVersion)
-                .append('}')
-                .toString();
+                .append(", tableVersion=").append(tableVersion);
+        if (endTableVersion != null) {
+            sb.append(", endTableVersion=").append(endTableVersion);
+        }
+        return sb.append('}').toString();
     }
 }

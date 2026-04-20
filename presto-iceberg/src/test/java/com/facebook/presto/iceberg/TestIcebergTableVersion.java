@@ -378,6 +378,32 @@ public class TestIcebergTableVersion
         assertQueryFails("SELECT desc FROM " + tableName2 + " FOR TIMESTAMP BEFORE NULL", "Table version AS OF/BEFORE expression cannot be NULL for .*");
     }
 
+    @Test
+    public void testTimeTravelBetweenSyntax()
+    {
+        assertQuery("SELECT desc FROM " + tableName1 + " FOR TIMESTAMP BETWEEN TIMESTAMP " + "'" + tab1Timestamp1 + "' AND TIMESTAMP " + "'" + tab1Timestamp2 + "' ORDER BY 1", "VALUES ('aaa'), ('bbb')");
+        assertQuery("SELECT desc FROM " + tableName1 + " FOR TIMESTAMP FROM TIMESTAMP " + "'" + tab1Timestamp1 + "' TO TIMESTAMP " + "'" + tab1Timestamp3 + "' ORDER BY 1", "VALUES ('aaa'), ('bbb'), ('ccc')");
+        assertQuery("SELECT desc FROM " + tableName1 + " FOR VERSION BETWEEN " + tab1VersionId1 + " AND " + tab1VersionId2 + " ORDER BY 1", "VALUES ('aaa'), ('bbb')");
+        assertQuery("SELECT desc FROM " + tableName2 + " FOR VERSION FROM " + tab2VersionId1 + " TO " + tab2VersionId3 + " ORDER BY 1", "VALUES ('xxx'), ('yyy'), ('zzz')");
+        assertQuery("SELECT desc FROM " + tableName1 + " FOR SYSTEM_TIME BETWEEN TIMESTAMP " + "'" + tab1Timestamp1 + "' AND TIMESTAMP " + "'" + tab1Timestamp2 + "' ORDER BY 1", "VALUES ('aaa'), ('bbb')");
+        assertQuery("SELECT desc FROM " + tableName2 + " FOR SYSTEM_VERSION FROM " + tab2VersionId1 + " TO " + tab2VersionId2 + " ORDER BY 1", "VALUES ('xxx'), ('yyy')");
+        assertQuery("SELECT COUNT(*) FROM " + tableName1 + " FOR TIMESTAMP BETWEEN TIMESTAMP " + "'" + tab1Timestamp1 + "' AND TIMESTAMP " + "'" + tab1Timestamp3 + "'", "VALUES 3");
+        assertQuery("SELECT desc FROM " + tableName1 + " FOR VERSION BETWEEN " + tab1VersionId1 + " AND " + tab1VersionId3 + " WHERE id = 2 ORDER BY 1", "VALUES ('bbb')");
+        assertQuery("SELECT COUNT(*) FROM " + tableName1 + " FOR VERSION BETWEEN " + tab1VersionId1 + " AND " + tab1VersionId2 + " INNER JOIN "
+                + tableName2 + " FOR VERSION BETWEEN " + tab2VersionId1 + " AND " + tab2VersionId2 + " ON " + tableName1 + ".id = " + tableName2 + ".id", "VALUES 2");
+    }
+
+    @Test
+    public void testTimeTravelBetweenSyntaxErrors()
+    {
+        assertQueryFails("SELECT desc FROM " + tableName1 + " FOR TIMESTAMP BETWEEN TIMESTAMP " + "'" + tab1Timestamp3 + "' AND TIMESTAMP " + "'" + tab1Timestamp1 + "'", ".*Invalid time range.*");
+        assertQueryFails("SELECT desc FROM " + tableName1 + " FOR VERSION BETWEEN NULL AND " + tab1VersionId2, ".*Table version.*expression cannot be NULL.*");
+        assertQueryFails("SELECT desc FROM " + tableName1 + " FOR VERSION BETWEEN " + tab1VersionId1 + " AND NULL", ".*Table version.*expression cannot be NULL.*");
+        assertQueryFails("SELECT desc FROM " + tableName1 + " FOR VERSION BETWEEN 999999 AND 999998", ".*Iceberg snapshot ID does not exists.*");
+        assertQueryFails("SELECT desc FROM " + tableName1 + " FOR TIMESTAMP BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND TIMESTAMP '2020-01-02 00:00:00'", ".*No history found based on timestamp.*");
+        assertQueryFails("SELECT desc FROM " + tableName1 + " FOR VERSION BETWEEN " + tab1VersionId1 + " AND TIMESTAMP " + "'" + tab1Timestamp2 + "'", ".*mismatched input.*");
+    }
+
     private Session sessionForTimezone(String zoneId, boolean legacyTimestamp)
     {
         SessionBuilder sessionBuilder = Session.builder(getSession())

@@ -1403,6 +1403,14 @@ public abstract class IcebergAbstractMetadata
                 })
                 .orElseGet(() -> resolveSnapshotIdByName(table, name));
 
+        IcebergTableType tableType = name.getTableType();
+        Optional<Long> changelogEndSnapshot = name.getChangelogEndSnapshot();
+        if (tableVersion.isPresent() && tableVersion.get().isRangeQuery()) {
+            tableType = CHANGELOG;
+            long endSnapshotId = getEndSnapshotIdForTableVersion(table, tableVersion.get());
+            changelogEndSnapshot = Optional.of(endSnapshotId);
+        }
+
         // Validate unsupported v3 features (column defaults, encryption) before
         // proceeding
         if (table instanceof BaseTable) {
@@ -1417,7 +1425,7 @@ public abstract class IcebergAbstractMetadata
 
         return new IcebergTableHandle(
                 tableNameToLoad.getSchemaName(),
-                new IcebergTableName(tableNameToLoad.getTableName(), name.getTableType(), tableSnapshotId, name.getBranchName(), name.getChangelogEndSnapshot()),
+                new IcebergTableName(tableNameToLoad.getTableName(), tableType, tableSnapshotId, name.getBranchName(), changelogEndSnapshot),
                 name.getSnapshotId().isPresent(),
                 tryGetLocation(table),
                 tryGetProperties(table),
@@ -1742,12 +1750,66 @@ public abstract class IcebergAbstractMetadata
                 if (tableVersion.getVersionOperator() == VersionOperator.EQUAL) { // AS OF Case
                     return snapshotId;
                 }
-                else { // BEFORE Case
+                else if (tableVersion.getVersionOperator() == VersionOperator.LESS_THAN) { // BEFORE Case
                     return getSnapshotIdTimeOperator(table, table.snapshot(snapshotId).timestampMillis(), VersionOperator.LESS_THAN);
+                }
+                else { // BETWEEN or FROM_TO - return start snapshot
+                    return snapshotId;
                 }
             }
             else if (tableVersion.getVersionExpressionType() instanceof VarcharType) {
                 String branchOrTagName = ((Slice) tableVersion.getTableVersion()).toStringUtf8();
+                if (!table.refs().containsKey(branchOrTagName)) {
+                    throw new PrestoException(ICEBERG_INVALID_SNAPSHOT_ID, "Could not find Iceberg table branch or tag: " + branchOrTagName);
+                }
+                return table.refs().get(branchOrTagName).snapshotId();
+            }
+            throw new PrestoException(NOT_SUPPORTED, "Unsupported table version expression type: " + tableVersion.getVersionExpressionType());
+        }
+        throw new PrestoException(NOT_SUPPORTED, "Unsupported table version type: " + tableVersion.getVersionType());
+    }
+
+    private static long getEndSnapshotIdForTableVersion(Table table, ConnectorTableVersion tableVersion)
+    {
+        if (!tableVersion.isRangeQuery()) {
+            throw new PrestoException(NOT_SUPPORTED, "getEndSnapshotIdForTableVersion called for non-range query");
+        }
+        if (tableVersion.getVersionType() == VersionType.TIMESTAMP) {
+            if (tableVersion.getVersionExpressionType() instanceof TimestampWithTimeZoneType) {
+                long millisUtc = new SqlTimestampWithTimeZone((long) tableVersion.getEndTableVersion()).getMillisUtc();
+                return getSnapshotIdTimeOperator(table, millisUtc, VersionOperator.EQUAL);
+            }
+            else if (tableVersion.getVersionExpressionType() instanceof TimestampType) {
+                long timestampValue = (long) tableVersion.getEndTableVersion();
+                long millisUtc = ((TimestampType) tableVersion.getVersionExpressionType()).getPrecision().toMillis(timestampValue);
+                return getSnapshotIdTimeOperator(table, millisUtc, VersionOperator.EQUAL);
+            }
+            else if (tableVersion.getVersionExpressionType() instanceof BigintType) {
+                return getSnapshotIdTimeOperator(table, (long) tableVersion.getEndTableVersion(), VersionOperator.EQUAL);
+            }
+            else if (tableVersion.getVersionExpressionType() instanceof VarcharType) {
+                try {
+                    long millisUtc = Long.parseLong(((Slice) tableVersion.getEndTableVersion()).toStringUtf8());
+                    return getSnapshotIdTimeOperator(table, millisUtc, VersionOperator.EQUAL);
+                }
+                catch (NumberFormatException e) {
+                    throw new PrestoException(NOT_SUPPORTED,
+                            "VARCHAR value for time travel must be a numeric epoch millisecond timestamp, got: " +
+                                    ((Slice) tableVersion.getEndTableVersion()).toStringUtf8());
+                }
+            }
+            throw new PrestoException(NOT_SUPPORTED, "Unsupported table version expression type: " + tableVersion.getVersionExpressionType());
+        }
+        if (tableVersion.getVersionType() == VersionType.VERSION) {
+            if (tableVersion.getVersionExpressionType() instanceof BigintType) {
+                long snapshotId = (long) tableVersion.getEndTableVersion();
+                if (table.snapshot(snapshotId) == null) {
+                    throw new PrestoException(ICEBERG_INVALID_SNAPSHOT_ID, "Iceberg snapshot ID does not exists: " + snapshotId);
+                }
+                return snapshotId;
+            }
+            else if (tableVersion.getVersionExpressionType() instanceof VarcharType) {
+                String branchOrTagName = ((Slice) tableVersion.getEndTableVersion()).toStringUtf8();
                 if (!table.refs().containsKey(branchOrTagName)) {
                     throw new PrestoException(ICEBERG_INVALID_SNAPSHOT_ID, "Could not find Iceberg table branch or tag: " + branchOrTagName);
                 }

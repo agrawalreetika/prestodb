@@ -238,7 +238,9 @@ import static com.facebook.presto.sql.tree.TableVersionExpression.TableVersionOp
 import static com.facebook.presto.sql.tree.TableVersionExpression.TableVersionOperator.EQUAL;
 import static com.facebook.presto.sql.tree.TableVersionExpression.TableVersionOperator.LESS_THAN;
 import static com.facebook.presto.sql.tree.TableVersionExpression.timestampExpression;
+import static com.facebook.presto.sql.tree.TableVersionExpression.timestampRangeExpression;
 import static com.facebook.presto.sql.tree.TableVersionExpression.versionExpression;
+import static com.facebook.presto.sql.tree.TableVersionExpression.versionRangeExpression;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.MoreCollectors.onlyElement;
 import static java.lang.String.format;
@@ -1975,6 +1977,24 @@ class AstBuilder
             case SqlBaseLexer.SYSTEM_VERSION:
             case SqlBaseLexer.VERSION:
                 return versionExpression(getLocation(context), getTableVersionOperator((Token) context.tableVersionState().getChild(0).getPayload()), child);
+            default:
+                throw new UnsupportedOperationException("Unsupported Type: " + context.tableVersionType.getText());
+        }
+    }
+
+    @Override
+    public Node visitTableVersionRange(SqlBaseParser.TableVersionRangeContext context)
+    {
+        Expression startValue = (Expression) visit(context.startValue);
+        Expression endValue = (Expression) visit(context.endValue);
+
+        switch (context.tableVersionType.getType()) {
+            case SqlBaseLexer.SYSTEM_TIME:
+            case SqlBaseLexer.TIMESTAMP:
+                return timestampRangeExpression(getLocation(context), startValue, endValue);
+            case SqlBaseLexer.SYSTEM_VERSION:
+            case SqlBaseLexer.VERSION:
+                return versionRangeExpression(getLocation(context), startValue, endValue);
             default:
                 throw new UnsupportedOperationException("Unsupported Type: " + context.tableVersionType.getText());
         }
