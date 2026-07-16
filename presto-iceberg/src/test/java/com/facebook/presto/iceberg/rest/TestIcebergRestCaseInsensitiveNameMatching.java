@@ -16,6 +16,7 @@ package com.facebook.presto.iceberg.rest;
 import com.facebook.presto.iceberg.IcebergConfig;
 import com.facebook.presto.iceberg.IcebergNativeCatalogFactory;
 import com.facebook.presto.iceberg.IcebergQueryRunner;
+import com.facebook.presto.testing.MaterializedResult;
 import com.facebook.presto.testing.QueryRunner;
 import com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.types.Types;
@@ -23,6 +24,8 @@ import org.testng.annotations.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.facebook.presto.iceberg.CatalogType.REST;
 import static com.facebook.presto.iceberg.FileFormat.ORC;
@@ -166,6 +169,73 @@ public class TestIcebergRestCaseInsensitiveNameMatching
         assertFalse(normalizedUpper.equals("MYTABLE"), "normalizeIdentifier must not leave uppercase unchanged in case-insensitive mode");
     }
 
+    /**
+     * Verifies that ANALYZE succeeds when the table has mixed-case column names in case-insensitive mode.
+     * All column names are lowercased by {@code normalizeIdentifier}, so SHOW STATS must report
+     * the stored lowercase names.
+     */
+    @Test
+    public void testAnalyzeMixedCaseColumns()
+    {
+        assertQuerySucceeds(testSession(), "CREATE TABLE analyze_mixed_ci (Id bigint, Name varchar, VAL integer)");
+        assertQuerySucceeds(testSession(), "INSERT INTO analyze_mixed_ci VALUES (1, 'alice', 10), (2, 'bob', 20), (3, 'alice', 30)");
+
+        assertQuerySucceeds(testSession(), "ANALYZE analyze_mixed_ci");
+
+        // All names are lowercased — stored as 'id', 'name', 'val'.
+        Set<String> colNames = showStatsColumnNames("analyze_mixed_ci");
+        assertTrue(colNames.contains("id"), "SHOW STATS must report stored lowercase column 'id', got: " + colNames);
+        assertTrue(colNames.contains("name"), "SHOW STATS must report stored lowercase column 'name', got: " + colNames);
+        assertTrue(colNames.contains("val"), "SHOW STATS must report stored lowercase column 'val', got: " + colNames);
+        assertFalse(colNames.contains("Id"), "SHOW STATS must not preserve mixed-case 'Id' in case-insensitive mode, got: " + colNames);
+        assertFalse(colNames.contains("Name"), "SHOW STATS must not preserve mixed-case 'Name' in case-insensitive mode, got: " + colNames);
+        assertFalse(colNames.contains("VAL"), "SHOW STATS must not preserve mixed-case 'VAL' in case-insensitive mode, got: " + colNames);
+
+        assertQuerySucceeds(testSession(), "DROP TABLE analyze_mixed_ci");
+    }
+
+    /**
+     * Verifies that ANALYZE and SHOW STATS work correctly with all-lowercase column names in
+     * case-insensitive mode — acts as a regression guard that the fix does not break the normal path.
+     */
+    @Test
+    public void testAnalyzeLowerCaseColumns()
+    {
+        assertQuerySucceeds(testSession(), "CREATE TABLE analyze_lower_ci (id bigint, name varchar, val integer)");
+        assertQuerySucceeds(testSession(), "INSERT INTO analyze_lower_ci VALUES (1, 'alice', 10), (2, 'bob', 20), (3, 'alice', 30)");
+
+        assertQuerySucceeds(testSession(), "ANALYZE analyze_lower_ci");
+
+        Set<String> colNames = showStatsColumnNames("analyze_lower_ci");
+        assertTrue(colNames.contains("id"), "SHOW STATS must report column 'id', got: " + colNames);
+        assertTrue(colNames.contains("name"), "SHOW STATS must report column 'name', got: " + colNames);
+        assertTrue(colNames.contains("val"), "SHOW STATS must report column 'val', got: " + colNames);
+
+        assertQuerySucceeds(testSession(), "DROP TABLE analyze_lower_ci");
+    }
+
+    /**
+     * Verifies that SHOW STATS FOR (subquery) with a partition column filter works in
+     * case-insensitive mode. The column is stored as 'regionid' (lowercased), so any
+     * case variant of the identifier resolves to the same partition column, ensuring
+     * the predicate is pushed down and no FilterNode remains.
+     */
+    @Test
+    public void testShowStatsForFilteredMixedCaseColumns()
+    {
+        // Column and partition stored as 'regionid' (normalizeIdentifier lowercases).
+        assertQuerySucceeds(testSession(), "CREATE TABLE stats_filter_ci (RegionId bigint, Name varchar) WITH (partitioning = ARRAY['RegionId'])");
+        assertQuerySucceeds(testSession(), "INSERT INTO stats_filter_ci VALUES (1, 'north'), (2, 'south'), (1, 'east')");
+        assertQuerySucceeds(testSession(), "ANALYZE stats_filter_ci");
+
+        // Lowercase filter — matches stored 'regionid' partition column → pushed down → succeeds.
+        assertQuerySucceeds(testSession(), "SHOW STATS FOR (SELECT * FROM stats_filter_ci WHERE regionid = 1)");
+        // Mixed-case filter — also normalised to 'regionid' → same partition column → succeeds.
+        assertQuerySucceeds(testSession(), "SHOW STATS FOR (SELECT * FROM stats_filter_ci WHERE RegionId = 1)");
+
+        assertQuerySucceeds(testSession(), "DROP TABLE stats_filter_ci");
+    }
+
     @Test
     public void testRewriteDataFilesWithSortedByMixedCaseColumn()
     {
@@ -191,5 +261,14 @@ public class TestIcebergRestCaseInsensitiveNameMatching
         assertFalse(columns.get(2).name().equals("VAL"), "Column 2 must NOT be stored as mixed-case 'VAL'");
 
         assertQuerySucceeds(testSession(), "DROP TABLE rewrite_sorted_ci");
+    }
+
+    private Set<String> showStatsColumnNames(String tableName)
+    {
+        MaterializedResult result = computeActual(testSession(), "SHOW STATS FOR " + tableName);
+        return result.getMaterializedRows().stream()
+                .map(row -> (String) row.getField(0))
+                .filter(name -> name != null)
+                .collect(Collectors.toSet());
     }
 }
