@@ -113,12 +113,14 @@ public class TestIcebergRestCaseSensitiveNameMatching
         assertQuerySucceeds(testSession(), "CREATE TABLE coltestquoted (\"FirstName\" varchar, \"lastName\" varchar)");
         assertQuerySucceeds(testSession(), "INSERT INTO coltestquoted VALUES ('Alice', 'Smith')");
         assertQuery(testSession(), "SELECT \"FirstName\", \"lastName\" FROM coltestquoted", "VALUES ('Alice', 'Smith')");
+        assertQueryFails(testSession(), "SELECT firstname, lastname FROM coltestquoted", ".*Column.*firstname.*cannot be resolved.*");
         assertQuerySucceeds(testSession(), "DROP TABLE coltestquoted");
 
-        // Unquoted mixed-case: same result — normalizeIdentifier preserves as-is.
+        // Unquoted mixed-case: normalizeIdentifier preserves as-is; analyser resolution is exact-case too.
         assertQuerySucceeds(testSession(), "CREATE TABLE coltestunquoted (FirstName varchar, lastName varchar)");
         assertQuerySucceeds(testSession(), "INSERT INTO coltestunquoted VALUES ('Bob', 'Jones')");
         assertQuery(testSession(), "SELECT FirstName, lastName FROM coltestunquoted", "VALUES ('Bob', 'Jones')");
+        assertQueryFails(testSession(), "SELECT firstname, lastname FROM coltestunquoted", ".*Column.*firstname.*cannot be resolved.*");
         assertQuerySucceeds(testSession(), "DROP TABLE coltestunquoted");
     }
 
@@ -129,12 +131,14 @@ public class TestIcebergRestCaseSensitiveNameMatching
         assertQuerySucceeds(testSession(), "CREATE TABLE partTestQuoted (\"RegionId\" bigint, name varchar) WITH (partitioning = ARRAY['\"RegionId\"'])");
         assertQuerySucceeds(testSession(), "INSERT INTO partTestQuoted VALUES (1, 'north'), (2, 'south')");
         assertQuery(testSession(), "SELECT \"RegionId\", name FROM partTestQuoted ORDER BY \"RegionId\"", "VALUES (1, 'north'), (2, 'south')");
+        assertQueryFails(testSession(), "SELECT regionid FROM partTestQuoted", ".*Column.*regionid.*cannot be resolved.*");
         assertQuerySucceeds(testSession(), "DROP TABLE partTestQuoted");
 
         // Unquoted in partition array: 'RegionId' preserved as-is.
         assertQuerySucceeds(testSession(), "CREATE TABLE partTestUnquoted (RegionId bigint, name varchar) WITH (partitioning = ARRAY['RegionId'])");
         assertQuerySucceeds(testSession(), "INSERT INTO partTestUnquoted VALUES (1, 'north'), (2, 'south')");
         assertQuery(testSession(), "SELECT RegionId, name FROM partTestUnquoted ORDER BY RegionId", "VALUES (1, 'north'), (2, 'south')");
+        assertQueryFails(testSession(), "SELECT regionid FROM partTestUnquoted", ".*Column.*regionid.*cannot be resolved.*");
         assertQuerySucceeds(testSession(), "DROP TABLE partTestUnquoted");
     }
 
@@ -240,6 +244,10 @@ public class TestIcebergRestCaseSensitiveNameMatching
         assertFalse(columns.get(0).name().equals("id"), "Column 0 must NOT be stored as lowercase 'id'");
         assertFalse(columns.get(1).name().equals("name"), "Column 1 must NOT be stored as lowercase 'name'");
         assertFalse(columns.get(2).name().equals("val"), "Column 2 must NOT be stored as lowercase 'val'");
+
+        assertQueryFails(testSession(), "SELECT id FROM rewrite_sorted_cs", ".*Column.*id.*cannot be resolved.*");
+        assertQueryFails(testSession(), "SELECT name FROM rewrite_sorted_cs", ".*Column.*name.*cannot be resolved.*");
+        assertQueryFails(testSession(), "SELECT val FROM rewrite_sorted_cs", ".*Column.*val.*cannot be resolved.*");
 
         assertQuerySucceeds(testSession(), "DROP TABLE rewrite_sorted_cs");
     }

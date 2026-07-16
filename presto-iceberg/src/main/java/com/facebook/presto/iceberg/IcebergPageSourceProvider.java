@@ -216,6 +216,7 @@ public class IcebergPageSourceProvider
     private final PageIndexerFactory pageIndexerFactory;
     private final int maxOpenPartitions;
     private final SortParameters sortParameters;
+    private final boolean caseSensitiveNameMatching;
 
     @Inject
     public IcebergPageSourceProvider(
@@ -246,6 +247,7 @@ public class IcebergPageSourceProvider
         this.pageIndexerFactory = requireNonNull(pageIndexerFactory, "pageIndexerFactory is null");
         requireNonNull(icebergConfig, "icebergConfig is null");
         this.maxOpenPartitions = icebergConfig.getMaxPartitionsPerWriter();
+        this.caseSensitiveNameMatching = icebergConfig.isCaseSensitiveNameMatching();
         this.sortParameters = requireNonNull(sortParameters, "sortParameters is null");
     }
 
@@ -503,7 +505,8 @@ public class IcebergPageSourceProvider
             StripeMetadataSourceFactory stripeMetadataSourceFactory,
             FileFormatDataSourceStats stats,
             Optional<EncryptionInformation> encryptionInformation,
-            DwrfEncryptionProvider dwrfEncryptionProvider)
+            DwrfEncryptionProvider dwrfEncryptionProvider,
+            boolean caseSensitiveNameMatching)
     {
         OrcDataSource orcDataSource = null;
         try {
@@ -560,7 +563,9 @@ public class IcebergPageSourceProvider
                             orcColumn -> Integer.parseInt(orcColumn.getAttributes().get(ORC_ICEBERG_ID_KEY)),
                             orcColumn -> IcebergOrcColumn.copy(orcColumn).setIcebergColumnId(Optional.of(Integer.parseInt(orcColumn.getAttributes().get(ORC_ICEBERG_ID_KEY))))));
 
-            Map<String, IcebergOrcColumn> fileOrcColumnsByName = uniqueIndex(fileOrcColumns, orcColumn -> orcColumn.getColumnName().toLowerCase(ENGLISH));
+            Map<String, IcebergOrcColumn> fileOrcColumnsByName = caseSensitiveNameMatching
+                    ? uniqueIndex(fileOrcColumns, IcebergOrcColumn::getColumnName)
+                    : uniqueIndex(fileOrcColumns, orcColumn -> orcColumn.getColumnName().toLowerCase(ENGLISH));
 
             int nextMissingColumnIndex = fileOrcColumnsByName.size();
             OptionalInt rowPositionColumnIndex = OptionalInt.empty();
@@ -1167,7 +1172,8 @@ public class IcebergPageSourceProvider
                         stripeMetadataSourceFactory,
                         fileFormatDataSourceStats,
                         Optional.empty(),
-                        dwrfEncryptionProvider);
+                        dwrfEncryptionProvider,
+                        caseSensitiveNameMatching);
         }
         throw new PrestoException(NOT_SUPPORTED, "File format not supported for Iceberg: " + fileFormat);
     }

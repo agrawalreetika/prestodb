@@ -18,7 +18,9 @@ import com.facebook.presto.common.type.Type;
 import com.facebook.presto.sql.tree.NodeLocation;
 import com.facebook.presto.sql.tree.QualifiedName;
 
+import java.util.Locale;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 
 import static java.util.Objects.requireNonNull;
 
@@ -154,12 +156,22 @@ public class Field
      */
     public boolean canResolve(QualifiedName name)
     {
+        return canResolve(name, s -> s.toLowerCase(Locale.ENGLISH));
+    }
+
+    /**
+     * Case-sensitivity-aware variant. Uses {@code nameKeyFunction} (the same function that was used
+     * to build the owning {@link RelationType}'s field index) to compare the stored field name
+     * against the queried name suffix, so that case-sensitive catalogs reject wrong-case references.
+     */
+    public boolean canResolve(QualifiedName name, UnaryOperator<String> nameKeyFunction)
+    {
         if (!this.name.isPresent()) {
             return false;
         }
 
-        // TODO: need to know whether the qualified name and the name of this field were quoted
-        return matchesPrefix(name.getPrefix()) && this.name.get().equalsIgnoreCase(name.getSuffix());
+        return matchesPrefix(name.getPrefix()) &&
+                nameKeyFunction.apply(this.name.get()).equals(nameKeyFunction.apply(name.getOriginalSuffix().getValue()));
     }
 
     @Override

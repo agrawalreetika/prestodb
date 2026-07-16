@@ -236,6 +236,42 @@ public class TestIcebergRestCaseInsensitiveNameMatching
         assertQuerySucceeds(testSession(), "DROP TABLE stats_filter_ci");
     }
 
+    /**
+     * Verifies that in case-insensitive mode all case variants of an identifier collapse to the
+     * same lowercase name.
+     */
+    @Test
+    public void testColumnsDistinctByCase()
+    {
+        assertQueryFails(testSession(), "CREATE TABLE casecols_ci (id bigint, ID bigint, Id bigint, name varchar)",
+                ".*Column name 'ID' specified more than once");
+
+        // Table with a single 'id' column — all case variants of the name resolve to it.
+        assertQuerySucceeds(testSession(), "CREATE TABLE casecols_ci (id bigint, name varchar)");
+        assertQuerySucceeds(testSession(), "INSERT INTO casecols_ci VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')");
+
+        // All case variants of 'id' resolve to the same stored lowercase column.
+        assertQuery(testSession(), "SELECT id FROM casecols_ci ORDER BY id", "VALUES (1), (2), (3)");
+        assertQuery(testSession(), "SELECT ID FROM casecols_ci ORDER BY ID", "VALUES (1), (2), (3)");
+        assertQuery(testSession(), "SELECT Id FROM casecols_ci ORDER BY Id", "VALUES (1), (2), (3)");
+
+        // WHERE and ORDER BY also resolve any case variant to the same column.
+        assertQuery(testSession(), "SELECT id FROM casecols_ci WHERE ID = 2", "VALUES (2)");
+        assertQuery(testSession(), "SELECT id FROM casecols_ci WHERE Id = 3", "VALUES (3)");
+        assertQuery(testSession(), "SELECT id FROM casecols_ci ORDER BY ID", "VALUES (1), (2), (3)");
+
+        // JOIN USING works with any case variant of 'name' — all resolve to the same column.
+        assertQuery(testSession(), "SELECT a.id FROM casecols_ci a JOIN casecols_ci b USING (name) WHERE a.id = 1", "VALUES (1)");
+        assertQuery(testSession(), "SELECT a.id FROM casecols_ci a JOIN casecols_ci b USING (NAME) WHERE a.id = 2", "VALUES (2)");
+
+        assertQueryFails(testSession(), "SELECT xyz FROM casecols_ci", ".*Column.*xyz.*cannot be resolved.*");
+        assertQueryFails(testSession(), "SELECT XYZ FROM casecols_ci", ".*Column.*xyz.*cannot be resolved.*");
+        assertQueryFails(testSession(), "SELECT id FROM casecols_ci WHERE XYZ = 1", ".*Column.*xyz.*cannot be resolved.*");
+        assertQueryFails(testSession(), "SELECT id FROM casecols_ci ORDER BY XYZ", ".*Column.*xyz.*cannot be resolved.*");
+
+        assertQuerySucceeds(testSession(), "DROP TABLE casecols_ci");
+    }
+
     @Test
     public void testRewriteDataFilesWithSortedByMixedCaseColumn()
     {
