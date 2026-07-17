@@ -23,14 +23,15 @@ import org.apache.iceberg.types.Types;
 import org.testng.annotations.Test;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static com.facebook.presto.iceberg.CatalogType.REST;
 import static com.facebook.presto.iceberg.FileFormat.ORC;
 import static com.facebook.presto.iceberg.IcebergQueryRunner.ICEBERG_CATALOG;
 import static com.facebook.presto.iceberg.rest.IcebergRestTestUtil.restConnectorProperties;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.lang.String.format;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -80,28 +81,35 @@ public class TestIcebergRestCaseInsensitiveNameMatching
     {
         // normalizeIdentifier lowercases 'MixedCaseTable' → 'mixedcasetable'.
         // All case variants resolve to the same stored name.
-        assertQuerySucceeds(testSession(), "CREATE TABLE MixedCaseTable (id bigint, val varchar)");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE MixedCaseTable (id bigint, val varchar)");
 
-        assertQuerySucceeds(testSession(), "SELECT * FROM MixedCaseTable");
-        assertQuerySucceeds(testSession(), "SELECT * FROM mixedcasetable");
-        assertQuerySucceeds(testSession(), "SELECT * FROM MIXEDCASETABLE");
+            assertQuerySucceeds(testSession(), "SELECT * FROM MixedCaseTable");
+            assertQuerySucceeds(testSession(), "SELECT * FROM mixedcasetable");
+            assertQuerySucceeds(testSession(), "SELECT * FROM MIXEDCASETABLE");
 
-        // Creating with a different case input refers to the same table — already exists.
-        assertQueryFails(testSession(), "CREATE TABLE mixedcasetable (id bigint, val varchar)", ".*Table.*already exists.*");
-        assertQuerySucceeds(testSession(), "DROP TABLE MixedCaseTable");
+            // Creating with a different case input refers to the same table — already exists.
+            assertQueryFails(testSession(), "CREATE TABLE mixedcasetable (id bigint, val varchar)", ".*Table.*already exists.*");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS MixedCaseTable");
+        }
     }
 
     @Test
     public void testCreateTableAsMixedCase()
     {
         // 'MyTable' is normalised to 'mytable'; all case variants resolve to the same table.
-        assertQuerySucceeds(testSession(), "CREATE TABLE MyTable AS SELECT 1 AS id, 'hello' AS name");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE MyTable AS SELECT 1 AS id, 'hello' AS name");
 
-        assertQuery(testSession(), "SELECT id, name FROM MyTable", "VALUES (1, 'hello')");
-        assertQuery(testSession(), "SELECT id, name FROM mytable", "VALUES (1, 'hello')");
-        assertQuery(testSession(), "SELECT id, name FROM MYTABLE", "VALUES (1, 'hello')");
-
-        assertQuerySucceeds(testSession(), "DROP TABLE MyTable");
+            assertQuery(testSession(), "SELECT id, name FROM MyTable", "VALUES (1, 'hello')");
+            assertQuery(testSession(), "SELECT id, name FROM mytable", "VALUES (1, 'hello')");
+            assertQuery(testSession(), "SELECT id, name FROM MYTABLE", "VALUES (1, 'hello')");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS MyTable");
+        }
     }
 
     @Test
@@ -110,17 +118,25 @@ public class TestIcebergRestCaseInsensitiveNameMatching
         // normalizeIdentifier lowercases every column name regardless of quoting.
 
         // Quoted: 'FirstName' → 'firstname'. Any case variant retrieves the same column.
-        assertQuerySucceeds(testSession(), "CREATE TABLE coltestquoted (\"FirstName\" varchar, \"lastName\" varchar)");
-        assertQuerySucceeds(testSession(), "INSERT INTO coltestquoted VALUES ('Alice', 'Smith')");
-        assertQuery(testSession(), "SELECT firstname, lastname FROM coltestquoted", "VALUES ('Alice', 'Smith')");
-        assertQuery(testSession(), "SELECT \"FirstName\", \"lastName\" FROM coltestquoted", "VALUES ('Alice', 'Smith')");
-        assertQuerySucceeds(testSession(), "DROP TABLE coltestquoted");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE coltestquoted (\"FirstName\" varchar, \"lastName\" varchar)");
+            assertQuerySucceeds(testSession(), "INSERT INTO coltestquoted VALUES ('Alice', 'Smith')");
+            assertQuery(testSession(), "SELECT firstname, lastname FROM coltestquoted", "VALUES ('Alice', 'Smith')");
+            assertQuery(testSession(), "SELECT \"FirstName\", \"lastName\" FROM coltestquoted", "VALUES ('Alice', 'Smith')");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS coltestquoted");
+        }
 
         // Unquoted: 'FirstName' → 'firstname'.
-        assertQuerySucceeds(testSession(), "CREATE TABLE coltestunquoted (FirstName varchar, lastName varchar)");
-        assertQuerySucceeds(testSession(), "INSERT INTO coltestunquoted VALUES ('Bob', 'Jones')");
-        assertQuery(testSession(), "SELECT firstname, lastname FROM coltestunquoted", "VALUES ('Bob', 'Jones')");
-        assertQuerySucceeds(testSession(), "DROP TABLE coltestunquoted");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE coltestunquoted (FirstName varchar, lastName varchar)");
+            assertQuerySucceeds(testSession(), "INSERT INTO coltestunquoted VALUES ('Bob', 'Jones')");
+            assertQuery(testSession(), "SELECT firstname, lastname FROM coltestunquoted", "VALUES ('Bob', 'Jones')");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS coltestunquoted");
+        }
     }
 
     @Test
@@ -130,27 +146,39 @@ public class TestIcebergRestCaseInsensitiveNameMatching
         // partition array reference both resolve to the same lowercase name.
 
         // Quoted in array: '"RegionId"' → 'RegionId' → 'regionid'. Column also → 'regionid'. ✓
-        assertQuerySucceeds(testSession(), "CREATE TABLE partTestQuoted (\"RegionId\" bigint, name varchar) WITH (partitioning = ARRAY['\"RegionId\"'])");
-        assertQuerySucceeds(testSession(), "INSERT INTO partTestQuoted VALUES (1, 'north'), (2, 'south')");
-        assertQuery(testSession(), "SELECT regionid, name FROM partTestQuoted ORDER BY regionid", "VALUES (1, 'north'), (2, 'south')");
-        assertQuerySucceeds(testSession(), "DROP TABLE partTestQuoted");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE partTestQuoted (\"RegionId\" bigint, name varchar) WITH (partitioning = ARRAY['\"RegionId\"'])");
+            assertQuerySucceeds(testSession(), "INSERT INTO partTestQuoted VALUES (1, 'north'), (2, 'south')");
+            assertQuery(testSession(), "SELECT regionid, name FROM partTestQuoted ORDER BY regionid", "VALUES (1, 'north'), (2, 'south')");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS partTestQuoted");
+        }
 
         // Unquoted in array: 'RegionId' → 'regionid'. ✓
-        assertQuerySucceeds(testSession(), "CREATE TABLE partTestUnquoted (RegionId bigint, name varchar) WITH (partitioning = ARRAY['RegionId'])");
-        assertQuerySucceeds(testSession(), "INSERT INTO partTestUnquoted VALUES (1, 'north'), (2, 'south')");
-        assertQuery(testSession(), "SELECT regionid, name FROM partTestUnquoted ORDER BY regionid", "VALUES (1, 'north'), (2, 'south')");
-        assertQuerySucceeds(testSession(), "DROP TABLE partTestUnquoted");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE partTestUnquoted (RegionId bigint, name varchar) WITH (partitioning = ARRAY['RegionId'])");
+            assertQuerySucceeds(testSession(), "INSERT INTO partTestUnquoted VALUES (1, 'north'), (2, 'south')");
+            assertQuery(testSession(), "SELECT regionid, name FROM partTestUnquoted ORDER BY regionid", "VALUES (1, 'north'), (2, 'south')");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS partTestUnquoted");
+        }
     }
 
     @Test
     public void testShowColumnsCaseInsensitive()
     {
         // All column names are lowercased regardless of how they were written.
-        assertQuerySucceeds(testSession(), "CREATE TABLE showcols (\"MyCol\" bigint, \"anotherCol\" varchar)");
-        String result = getQueryRunner().execute(testSession(), "SHOW COLUMNS FROM showcols").toString();
-        assertTrue(result.contains("mycol"), "Expected lowercase 'mycol' in SHOW COLUMNS output");
-        assertTrue(result.contains("anothercol"), "Expected lowercase 'anothercol' in SHOW COLUMNS output");
-        assertQuerySucceeds(testSession(), "DROP TABLE showcols");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE showcols (\"MyCol\" bigint, \"anotherCol\" varchar)");
+            String result = getQueryRunner().execute(testSession(), "SHOW COLUMNS FROM showcols").toString();
+            assertTrue(result.contains("mycol"), "Expected lowercase 'mycol' in SHOW COLUMNS output");
+            assertTrue(result.contains("anothercol"), "Expected lowercase 'anothercol' in SHOW COLUMNS output");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS showcols");
+        }
     }
 
     @Test
@@ -177,21 +205,24 @@ public class TestIcebergRestCaseInsensitiveNameMatching
     @Test
     public void testAnalyzeMixedCaseColumns()
     {
-        assertQuerySucceeds(testSession(), "CREATE TABLE analyze_mixed_ci (Id bigint, Name varchar, VAL integer)");
-        assertQuerySucceeds(testSession(), "INSERT INTO analyze_mixed_ci VALUES (1, 'alice', 10), (2, 'bob', 20), (3, 'alice', 30)");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE analyze_mixed_ci (Id bigint, Name varchar, VAL integer)");
+            assertQuerySucceeds(testSession(), "INSERT INTO analyze_mixed_ci VALUES (1, 'alice', 10), (2, 'bob', 20), (3, 'alice', 30)");
 
-        assertQuerySucceeds(testSession(), "ANALYZE analyze_mixed_ci");
+            assertQuerySucceeds(testSession(), "ANALYZE analyze_mixed_ci");
 
-        // All names are lowercased — stored as 'id', 'name', 'val'.
-        Set<String> colNames = showStatsColumnNames("analyze_mixed_ci");
-        assertTrue(colNames.contains("id"), "SHOW STATS must report stored lowercase column 'id', got: " + colNames);
-        assertTrue(colNames.contains("name"), "SHOW STATS must report stored lowercase column 'name', got: " + colNames);
-        assertTrue(colNames.contains("val"), "SHOW STATS must report stored lowercase column 'val', got: " + colNames);
-        assertFalse(colNames.contains("Id"), "SHOW STATS must not preserve mixed-case 'Id' in case-insensitive mode, got: " + colNames);
-        assertFalse(colNames.contains("Name"), "SHOW STATS must not preserve mixed-case 'Name' in case-insensitive mode, got: " + colNames);
-        assertFalse(colNames.contains("VAL"), "SHOW STATS must not preserve mixed-case 'VAL' in case-insensitive mode, got: " + colNames);
-
-        assertQuerySucceeds(testSession(), "DROP TABLE analyze_mixed_ci");
+            // All names are lowercased — stored as 'id', 'name', 'val'.
+            Set<String> colNames = showStatsColumnNames("analyze_mixed_ci");
+            assertTrue(colNames.contains("id"), "SHOW STATS must report stored lowercase column 'id', got: " + colNames);
+            assertTrue(colNames.contains("name"), "SHOW STATS must report stored lowercase column 'name', got: " + colNames);
+            assertTrue(colNames.contains("val"), "SHOW STATS must report stored lowercase column 'val', got: " + colNames);
+            assertFalse(colNames.contains("Id"), "SHOW STATS must not preserve mixed-case 'Id' in case-insensitive mode, got: " + colNames);
+            assertFalse(colNames.contains("Name"), "SHOW STATS must not preserve mixed-case 'Name' in case-insensitive mode, got: " + colNames);
+            assertFalse(colNames.contains("VAL"), "SHOW STATS must not preserve mixed-case 'VAL' in case-insensitive mode, got: " + colNames);
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS analyze_mixed_ci");
+        }
     }
 
     /**
@@ -201,17 +232,20 @@ public class TestIcebergRestCaseInsensitiveNameMatching
     @Test
     public void testAnalyzeLowerCaseColumns()
     {
-        assertQuerySucceeds(testSession(), "CREATE TABLE analyze_lower_ci (id bigint, name varchar, val integer)");
-        assertQuerySucceeds(testSession(), "INSERT INTO analyze_lower_ci VALUES (1, 'alice', 10), (2, 'bob', 20), (3, 'alice', 30)");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE analyze_lower_ci (id bigint, name varchar, val integer)");
+            assertQuerySucceeds(testSession(), "INSERT INTO analyze_lower_ci VALUES (1, 'alice', 10), (2, 'bob', 20), (3, 'alice', 30)");
 
-        assertQuerySucceeds(testSession(), "ANALYZE analyze_lower_ci");
+            assertQuerySucceeds(testSession(), "ANALYZE analyze_lower_ci");
 
-        Set<String> colNames = showStatsColumnNames("analyze_lower_ci");
-        assertTrue(colNames.contains("id"), "SHOW STATS must report column 'id', got: " + colNames);
-        assertTrue(colNames.contains("name"), "SHOW STATS must report column 'name', got: " + colNames);
-        assertTrue(colNames.contains("val"), "SHOW STATS must report column 'val', got: " + colNames);
-
-        assertQuerySucceeds(testSession(), "DROP TABLE analyze_lower_ci");
+            Set<String> colNames = showStatsColumnNames("analyze_lower_ci");
+            assertTrue(colNames.contains("id"), "SHOW STATS must report column 'id', got: " + colNames);
+            assertTrue(colNames.contains("name"), "SHOW STATS must report column 'name', got: " + colNames);
+            assertTrue(colNames.contains("val"), "SHOW STATS must report column 'val', got: " + colNames);
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS analyze_lower_ci");
+        }
     }
 
     /**
@@ -224,16 +258,19 @@ public class TestIcebergRestCaseInsensitiveNameMatching
     public void testShowStatsForFilteredMixedCaseColumns()
     {
         // Column and partition stored as 'regionid' (normalizeIdentifier lowercases).
-        assertQuerySucceeds(testSession(), "CREATE TABLE stats_filter_ci (RegionId bigint, Name varchar) WITH (partitioning = ARRAY['RegionId'])");
-        assertQuerySucceeds(testSession(), "INSERT INTO stats_filter_ci VALUES (1, 'north'), (2, 'south'), (1, 'east')");
-        assertQuerySucceeds(testSession(), "ANALYZE stats_filter_ci");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE stats_filter_ci (RegionId bigint, Name varchar) WITH (partitioning = ARRAY['RegionId'])");
+            assertQuerySucceeds(testSession(), "INSERT INTO stats_filter_ci VALUES (1, 'north'), (2, 'south'), (1, 'east')");
+            assertQuerySucceeds(testSession(), "ANALYZE stats_filter_ci");
 
-        // Lowercase filter — matches stored 'regionid' partition column → pushed down → succeeds.
-        assertQuerySucceeds(testSession(), "SHOW STATS FOR (SELECT * FROM stats_filter_ci WHERE regionid = 1)");
-        // Mixed-case filter — also normalised to 'regionid' → same partition column → succeeds.
-        assertQuerySucceeds(testSession(), "SHOW STATS FOR (SELECT * FROM stats_filter_ci WHERE RegionId = 1)");
-
-        assertQuerySucceeds(testSession(), "DROP TABLE stats_filter_ci");
+            // Lowercase filter — matches stored 'regionid' partition column → pushed down → succeeds.
+            assertQuerySucceeds(testSession(), "SHOW STATS FOR (SELECT * FROM stats_filter_ci WHERE regionid = 1)");
+            // Mixed-case filter — also normalised to 'regionid' → same partition column → succeeds.
+            assertQuerySucceeds(testSession(), "SHOW STATS FOR (SELECT * FROM stats_filter_ci WHERE RegionId = 1)");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS stats_filter_ci");
+        }
     }
 
     /**
@@ -247,56 +284,62 @@ public class TestIcebergRestCaseInsensitiveNameMatching
                 ".*Column name 'ID' specified more than once");
 
         // Table with a single 'id' column — all case variants of the name resolve to it.
-        assertQuerySucceeds(testSession(), "CREATE TABLE casecols_ci (id bigint, name varchar)");
-        assertQuerySucceeds(testSession(), "INSERT INTO casecols_ci VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE casecols_ci (id bigint, name varchar)");
+            assertQuerySucceeds(testSession(), "INSERT INTO casecols_ci VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')");
 
-        // All case variants of 'id' resolve to the same stored lowercase column.
-        assertQuery(testSession(), "SELECT id FROM casecols_ci ORDER BY id", "VALUES (1), (2), (3)");
-        assertQuery(testSession(), "SELECT ID FROM casecols_ci ORDER BY ID", "VALUES (1), (2), (3)");
-        assertQuery(testSession(), "SELECT Id FROM casecols_ci ORDER BY Id", "VALUES (1), (2), (3)");
+            // All case variants of 'id' resolve to the same stored lowercase column.
+            assertQuery(testSession(), "SELECT id FROM casecols_ci ORDER BY id", "VALUES (1), (2), (3)");
+            assertQuery(testSession(), "SELECT ID FROM casecols_ci ORDER BY ID", "VALUES (1), (2), (3)");
+            assertQuery(testSession(), "SELECT Id FROM casecols_ci ORDER BY Id", "VALUES (1), (2), (3)");
 
-        // WHERE and ORDER BY also resolve any case variant to the same column.
-        assertQuery(testSession(), "SELECT id FROM casecols_ci WHERE ID = 2", "VALUES (2)");
-        assertQuery(testSession(), "SELECT id FROM casecols_ci WHERE Id = 3", "VALUES (3)");
-        assertQuery(testSession(), "SELECT id FROM casecols_ci ORDER BY ID", "VALUES (1), (2), (3)");
+            // WHERE and ORDER BY also resolve any case variant to the same column.
+            assertQuery(testSession(), "SELECT id FROM casecols_ci WHERE ID = 2", "VALUES (2)");
+            assertQuery(testSession(), "SELECT id FROM casecols_ci WHERE Id = 3", "VALUES (3)");
+            assertQuery(testSession(), "SELECT id FROM casecols_ci ORDER BY ID", "VALUES (1), (2), (3)");
 
-        // JOIN USING works with any case variant of 'name' — all resolve to the same column.
-        assertQuery(testSession(), "SELECT a.id FROM casecols_ci a JOIN casecols_ci b USING (name) WHERE a.id = 1", "VALUES (1)");
-        assertQuery(testSession(), "SELECT a.id FROM casecols_ci a JOIN casecols_ci b USING (NAME) WHERE a.id = 2", "VALUES (2)");
+            // JOIN USING works with any case variant of 'name' — all resolve to the same column.
+            assertQuery(testSession(), "SELECT a.id FROM casecols_ci a JOIN casecols_ci b USING (name) WHERE a.id = 1", "VALUES (1)");
+            assertQuery(testSession(), "SELECT a.id FROM casecols_ci a JOIN casecols_ci b USING (NAME) WHERE a.id = 2", "VALUES (2)");
 
-        assertQueryFails(testSession(), "SELECT xyz FROM casecols_ci", ".*Column.*xyz.*cannot be resolved.*");
-        assertQueryFails(testSession(), "SELECT XYZ FROM casecols_ci", ".*Column.*xyz.*cannot be resolved.*");
-        assertQueryFails(testSession(), "SELECT id FROM casecols_ci WHERE XYZ = 1", ".*Column.*xyz.*cannot be resolved.*");
-        assertQueryFails(testSession(), "SELECT id FROM casecols_ci ORDER BY XYZ", ".*Column.*xyz.*cannot be resolved.*");
-
-        assertQuerySucceeds(testSession(), "DROP TABLE casecols_ci");
+            assertQueryFails(testSession(), "SELECT xyz FROM casecols_ci", ".*Column.*xyz.*cannot be resolved.*");
+            assertQueryFails(testSession(), "SELECT XYZ FROM casecols_ci", ".*Column.*xyz.*cannot be resolved.*");
+            assertQueryFails(testSession(), "SELECT id FROM casecols_ci WHERE XYZ = 1", ".*Column.*xyz.*cannot be resolved.*");
+            assertQueryFails(testSession(), "SELECT id FROM casecols_ci ORDER BY XYZ", ".*Column.*xyz.*cannot be resolved.*");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS casecols_ci");
+        }
     }
 
     @Test
     public void testRewriteDataFilesWithSortedByMixedCaseColumn()
     {
-        assertQuerySucceeds(testSession(), "CREATE TABLE rewrite_sorted_ci (Id bigint, Name varchar, VAL integer)");
-        assertQuerySucceeds(testSession(), "INSERT INTO rewrite_sorted_ci VALUES (3, 'c', 30), (1, 'a', 10)");
-        assertQuerySucceeds(testSession(), "INSERT INTO rewrite_sorted_ci VALUES (2, 'b', 20), (4, 'd', 40)");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE rewrite_sorted_ci (Id bigint, Name varchar, VAL integer)");
+            assertQuerySucceeds(testSession(), "INSERT INTO rewrite_sorted_ci VALUES (3, 'c', 30), (1, 'a', 10)");
+            assertQuerySucceeds(testSession(), "INSERT INTO rewrite_sorted_ci VALUES (2, 'b', 20), (4, 'd', 40)");
 
-        // sorted_by 'Id' → normalizeIdentifier → 'id' → matches stored column 'id'
-        assertQuerySucceeds(testSession(), format(
-                "CALL iceberg.system.rewrite_data_files(schema => '%s', table_name => 'rewrite_sorted_ci', " +
-                        "sorted_by => ARRAY['Id'])",
-                SCHEMA));
+            // sorted_by 'Id' → normalizeIdentifier → 'id' → matches stored column 'id'
+            assertQuerySucceeds(testSession(), format(
+                    "CALL iceberg.system.rewrite_data_files(schema => '%s', table_name => 'rewrite_sorted_ci', " +
+                            "sorted_by => ARRAY['Id'])",
+                    SCHEMA));
 
-        // Columns are stored and retrieved as lowercase
-        assertQuery(testSession(), "SELECT id, name, val FROM rewrite_sorted_ci ORDER BY id", "VALUES (1, 'a', 10), (2, 'b', 20), (3, 'c', 30), (4, 'd', 40)");
+            // Columns are stored and retrieved as lowercase
+            assertQuery(testSession(), "SELECT id, name, val FROM rewrite_sorted_ci ORDER BY id", "VALUES (1, 'a', 10), (2, 'b', 20), (3, 'c', 30), (4, 'd', 40)");
 
-        List<Types.NestedField> columns = getIcebergTable(SCHEMA, "rewrite_sorted_ci").schema().columns();
-        assertEquals(columns.get(0).name(), "id", "Column 0 must be stored as lowercase 'id'");
-        assertEquals(columns.get(1).name(), "name", "Column 1 must be stored as lowercase 'name'");
-        assertEquals(columns.get(2).name(), "val", "Column 2 must be stored as lowercase 'val'");
-        assertFalse(columns.get(0).name().equals("Id"), "Column 0 must NOT be stored as mixed-case 'Id'");
-        assertFalse(columns.get(1).name().equals("Name"), "Column 1 must NOT be stored as mixed-case 'Name'");
-        assertFalse(columns.get(2).name().equals("VAL"), "Column 2 must NOT be stored as mixed-case 'VAL'");
-
-        assertQuerySucceeds(testSession(), "DROP TABLE rewrite_sorted_ci");
+            List<Types.NestedField> columns = getIcebergTable(SCHEMA, "rewrite_sorted_ci").schema().columns();
+            assertEquals(columns.get(0).name(), "id", "Column 0 must be stored as lowercase 'id'");
+            assertEquals(columns.get(1).name(), "name", "Column 1 must be stored as lowercase 'name'");
+            assertEquals(columns.get(2).name(), "val", "Column 2 must be stored as lowercase 'val'");
+            assertFalse(columns.get(0).name().equals("Id"), "Column 0 must NOT be stored as mixed-case 'Id'");
+            assertFalse(columns.get(1).name().equals("Name"), "Column 1 must NOT be stored as mixed-case 'Name'");
+            assertFalse(columns.get(2).name().equals("VAL"), "Column 2 must NOT be stored as mixed-case 'VAL'");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS rewrite_sorted_ci");
+        }
     }
 
     private Set<String> showStatsColumnNames(String tableName)
@@ -304,7 +347,7 @@ public class TestIcebergRestCaseInsensitiveNameMatching
         MaterializedResult result = computeActual(testSession(), "SHOW STATS FOR " + tableName);
         return result.getMaterializedRows().stream()
                 .map(row -> (String) row.getField(0))
-                .filter(name -> name != null)
-                .collect(Collectors.toSet());
+                .filter(Objects::nonNull)
+                .collect(toImmutableSet());
     }
 }

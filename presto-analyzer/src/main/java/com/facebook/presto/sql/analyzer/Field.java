@@ -18,9 +18,7 @@ import com.facebook.presto.common.type.Type;
 import com.facebook.presto.sql.tree.NodeLocation;
 import com.facebook.presto.sql.tree.QualifiedName;
 
-import java.util.Locale;
 import java.util.Optional;
-import java.util.function.UnaryOperator;
 
 import static java.util.Objects.requireNonNull;
 
@@ -131,47 +129,6 @@ public class Field
     public boolean matchesPrefix(Optional<QualifiedName> prefix)
     {
         return !prefix.isPresent() || relationAlias.isPresent() && relationAlias.get().hasSuffix(prefix.get());
-    }
-
-    /*
-      Namespaces can have names such as "x", "x.y" or "" if there's no name
-      Name to resolve can have names like "a", "x.a", "x.y.a"
-
-      namespace  name     possible match
-       ""         "a"           y
-       "x"        "a"           y
-       "x.y"      "a"           y
-
-       ""         "x.a"         n
-       "x"        "x.a"         y
-       "x.y"      "x.a"         n
-
-       ""         "x.y.a"       n
-       "x"        "x.y.a"       n
-       "x.y"      "x.y.a"       n
-
-       ""         "y.a"         n
-       "x"        "y.a"         n
-       "x.y"      "y.a"         y
-     */
-    public boolean canResolve(QualifiedName name)
-    {
-        return canResolve(name, s -> s.toLowerCase(Locale.ENGLISH));
-    }
-
-    /**
-     * Case-sensitivity-aware variant. Uses {@code nameKeyFunction} (the same function that was used
-     * to build the owning {@link RelationType}'s field index) to compare the stored field name
-     * against the queried name suffix, so that case-sensitive catalogs reject wrong-case references.
-     */
-    public boolean canResolve(QualifiedName name, UnaryOperator<String> nameKeyFunction)
-    {
-        if (!this.name.isPresent()) {
-            return false;
-        }
-
-        return matchesPrefix(name.getPrefix()) &&
-                nameKeyFunction.apply(this.name.get()).equals(nameKeyFunction.apply(name.getOriginalSuffix().getValue()));
     }
 
     @Override

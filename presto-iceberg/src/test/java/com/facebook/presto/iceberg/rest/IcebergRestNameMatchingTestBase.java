@@ -118,29 +118,40 @@ public abstract class IcebergRestNameMatchingTestBase
     public void testSpecialCharacterIdentifiersViaDoubleQuotes()
     {
         // Columns with hyphen, space, and reserved keyword — all require double-quotes.
-        assertQuerySucceeds(testSession(), "CREATE TABLE specialcharcols (\"first-name\" varchar, \"last name\" varchar, \"order\" bigint)");
-        assertQuerySucceeds(testSession(), "INSERT INTO specialcharcols VALUES ('Alice', 'Smith', 1)");
-        assertQuery(testSession(), "SELECT \"first-name\", \"last name\", \"order\" FROM specialcharcols", "VALUES ('Alice', 'Smith', 1)");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE specialcharcols (\"first-name\" varchar, \"last name\" varchar, \"order\" bigint)");
+            assertQuerySucceeds(testSession(), "INSERT INTO specialcharcols VALUES ('Alice', 'Smith', 1)");
+            assertQuery(testSession(), "SELECT \"first-name\", \"last name\", \"order\" FROM specialcharcols", "VALUES ('Alice', 'Smith', 1)");
 
-        String result = getQueryRunner().execute(testSession(), "SHOW COLUMNS FROM specialcharcols").toString();
-        assertTrue(result.contains("first-name"), "Expected 'first-name' in SHOW COLUMNS output");
-        assertTrue(result.contains("last name"), "Expected 'last name' in SHOW COLUMNS output");
-        assertTrue(result.contains("order"), "Expected 'order' in SHOW COLUMNS output");
-
-        assertQuerySucceeds(testSession(), "DROP TABLE specialcharcols");
+            String result = getQueryRunner().execute(testSession(), "SHOW COLUMNS FROM specialcharcols").toString();
+            assertTrue(result.contains("first-name"), "Expected 'first-name' in SHOW COLUMNS output");
+            assertTrue(result.contains("last name"), "Expected 'last name' in SHOW COLUMNS output");
+            assertTrue(result.contains("order"), "Expected 'order' in SHOW COLUMNS output");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS specialcharcols");
+        }
 
         // Partition column with hyphen — must embed double-quotes in the raw array string.
-        assertQuerySucceeds(testSession(), "CREATE TABLE specialcharpart (\"region-id\" bigint, name varchar) WITH (partitioning = ARRAY['\"region-id\"'])");
-        assertQuerySucceeds(testSession(), "INSERT INTO specialcharpart VALUES (10, 'north'), (20, 'south')");
-        assertQuery(testSession(), "SELECT \"region-id\", name FROM specialcharpart ORDER BY \"region-id\"", "VALUES (10, 'north'), (20, 'south')");
-        assertQuerySucceeds(testSession(), "DROP TABLE specialcharpart");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE specialcharpart (\"region-id\" bigint, name varchar) WITH (partitioning = ARRAY['\"region-id\"'])");
+            assertQuerySucceeds(testSession(), "INSERT INTO specialcharpart VALUES (10, 'north'), (20, 'south')");
+            assertQuery(testSession(), "SELECT \"region-id\", name FROM specialcharpart ORDER BY \"region-id\"", "VALUES (10, 'north'), (20, 'south')");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS specialcharpart");
+        }
 
         // Reserved keyword 'year' as a partition column — quoting required in the array string
         // so the parser doesn't confuse it with the year() transform function.
-        assertQuerySucceeds(testSession(), "CREATE TABLE keywordpart (\"year\" bigint, name varchar) WITH (partitioning = ARRAY['\"year\"'])");
-        assertQuerySucceeds(testSession(), "INSERT INTO keywordpart VALUES (2024, 'a'), (2025, 'b')");
-        assertQuery(testSession(), "SELECT \"year\", name FROM keywordpart ORDER BY \"year\"", "VALUES (2024, 'a'), (2025, 'b')");
-        assertQuerySucceeds(testSession(), "DROP TABLE keywordpart");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE keywordpart (\"year\" bigint, name varchar) WITH (partitioning = ARRAY['\"year\"'])");
+            assertQuerySucceeds(testSession(), "INSERT INTO keywordpart VALUES (2024, 'a'), (2025, 'b')");
+            assertQuery(testSession(), "SELECT \"year\", name FROM keywordpart ORDER BY \"year\"", "VALUES (2024, 'a'), (2025, 'b')");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS keywordpart");
+        }
     }
 
     /**
@@ -153,36 +164,42 @@ public abstract class IcebergRestNameMatchingTestBase
     public void testPartitionTransformKeywordCaseInsensitive()
     {
         // Uppercase transform keywords accepted
-        assertQuerySucceeds(testSession(), "CREATE TABLE transformcase (ts timestamp, id bigint, val varchar) WITH (partitioning = ARRAY['YEAR(ts)', 'BUCKET(id, 4)'])");
-        assertQuerySucceeds(testSession(), "INSERT INTO transformcase VALUES (TIMESTAMP '2024-03-15 10:00:00', 1, 'a')");
-        assertQuerySucceeds(testSession(), "SELECT val FROM transformcase");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE transformcase (ts timestamp, id bigint, val varchar) WITH (partitioning = ARRAY['YEAR(ts)', 'BUCKET(id, 4)'])");
+            assertQuerySucceeds(testSession(), "INSERT INTO transformcase VALUES (TIMESTAMP '2024-03-15 10:00:00', 1, 'a')");
+            assertQuerySucceeds(testSession(), "SELECT val FROM transformcase");
 
-        // 1. SHOW CREATE TABLE serialises transforms in lowercase
-        String showCreate = getQueryRunner().execute(testSession(), "SHOW CREATE TABLE transformcase").toString();
-        assertTrue(showCreate.contains("year(ts)"), "Expected lowercase 'year(ts)' in SHOW CREATE TABLE output, got: " + showCreate);
-        assertTrue(showCreate.contains("bucket(id, 4)"), "Expected lowercase 'bucket(id, 4)' in SHOW CREATE TABLE output, got: " + showCreate);
+            // 1. SHOW CREATE TABLE serialises transforms in lowercase
+            String showCreate = getQueryRunner().execute(testSession(), "SHOW CREATE TABLE transformcase").toString();
+            assertTrue(showCreate.contains("year(ts)"), "Expected lowercase 'year(ts)' in SHOW CREATE TABLE output, got: " + showCreate);
+            assertTrue(showCreate.contains("bucket(id, 4)"), "Expected lowercase 'bucket(id, 4)' in SHOW CREATE TABLE output, got: " + showCreate);
 
-        // 2. Raw Iceberg catalog metadata also stores transforms in lowercase
-        List<PartitionField> fields = getIcebergTable(SCHEMA, "transformcase").spec().fields();
-        assertEquals(fields.size(), 2);
-        assertEquals(fields.get(0).transform().toString(), "year", "Iceberg must store transform as lowercase 'year'");
-        assertEquals(fields.get(1).transform().toString(), "bucket[4]", "Iceberg must store transform as lowercase 'bucket[4]'");
-
-        assertQuerySucceeds(testSession(), "DROP TABLE transformcase");
+            // 2. Raw Iceberg catalog metadata also stores transforms in lowercase
+            List<PartitionField> fields = getIcebergTable(SCHEMA, "transformcase").spec().fields();
+            assertEquals(fields.size(), 2);
+            assertEquals(fields.get(0).transform().toString(), "year", "Iceberg must store transform as lowercase 'year'");
+            assertEquals(fields.get(1).transform().toString(), "bucket[4]", "Iceberg must store transform as lowercase 'bucket[4]'");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS transformcase");
+        }
 
         // Mixed-case transform keywords accepted
-        assertQuerySucceeds(testSession(), "CREATE TABLE transformcasemixed (ts timestamp, val varchar) WITH (partitioning = ARRAY['Month(ts)', 'Truncate(val, 8)'])");
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE transformcasemixed (ts timestamp, val varchar) WITH (partitioning = ARRAY['Month(ts)', 'Truncate(val, 8)'])");
 
-        String showCreate2 = getQueryRunner().execute(testSession(), "SHOW CREATE TABLE transformcasemixed").toString();
-        assertTrue(showCreate2.contains("month(ts)"), "Expected lowercase 'month(ts)' in SHOW CREATE TABLE output, got: " + showCreate2);
-        assertTrue(showCreate2.contains("truncate(val, 8)"), "Expected lowercase 'truncate(val, 8)' in SHOW CREATE TABLE output, got: " + showCreate2);
+            String showCreate2 = getQueryRunner().execute(testSession(), "SHOW CREATE TABLE transformcasemixed").toString();
+            assertTrue(showCreate2.contains("month(ts)"), "Expected lowercase 'month(ts)' in SHOW CREATE TABLE output, got: " + showCreate2);
+            assertTrue(showCreate2.contains("truncate(val, 8)"), "Expected lowercase 'truncate(val, 8)' in SHOW CREATE TABLE output, got: " + showCreate2);
 
-        List<PartitionField> fields2 = getIcebergTable(SCHEMA, "transformcasemixed").spec().fields();
-        assertEquals(fields2.size(), 2);
-        assertEquals(fields2.get(0).transform().toString(), "month", "Iceberg must store transform as lowercase 'month'");
-        assertEquals(fields2.get(1).transform().toString(), "truncate[8]", "Iceberg must store transform as lowercase 'truncate[8]'");
-
-        assertQuerySucceeds(testSession(), "DROP TABLE transformcasemixed");
+            List<PartitionField> fields2 = getIcebergTable(SCHEMA, "transformcasemixed").spec().fields();
+            assertEquals(fields2.size(), 2);
+            assertEquals(fields2.get(0).transform().toString(), "month", "Iceberg must store transform as lowercase 'month'");
+            assertEquals(fields2.get(1).transform().toString(), "truncate[8]", "Iceberg must store transform as lowercase 'truncate[8]'");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS transformcasemixed");
+        }
     }
 
     protected IcebergNativeCatalogFactory buildCatalogFactory(IcebergConfig icebergConfig)

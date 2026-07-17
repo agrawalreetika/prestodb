@@ -45,11 +45,19 @@ public class RelationType
 
     private final Map<Field, Integer> fieldIndexes;
 
-    // Index for O(1) field resolution by name.
-    // Key is produced by nameKeyFunction (lowercase by default; identity for case-sensitive catalogs).
+    // Primary index: key produced by nameKeyFunction.
+    // In single-catalog relations this is the only index used.
+    // In cross-catalog join results, this holds fields from the left (this) relation.
     private final Map<String, List<Field>> fieldsByName;
 
+    // Secondary index: present only in merged relations produced by joinWith() when the
+    // right side carries a different nameKeyFunction. Key produced by otherNameKeyFunction.
+    private final Map<String, List<Field>> otherFieldsByName;
+
     private final UnaryOperator<String> nameKeyFunction;
+
+    // nameKeyFunction of the right-side relation after joinWith(); null for single-relation types.
+    private final UnaryOperator<String> otherNameKeyFunction;
 
     public RelationType(Field... fields)
     {
@@ -78,6 +86,7 @@ public class RelationType
         requireNonNull(fields, "fields is null");
         requireNonNull(nameKeyFunction, "nameKeyFunction is null");
         this.nameKeyFunction = nameKeyFunction;
+        this.otherNameKeyFunction = null;
         this.allFields = ImmutableList.copyOf(fields);
         this.visibleFields = ImmutableList.copyOf(fields.stream().filter(not(Field::isHidden)).iterator());
 
@@ -98,6 +107,37 @@ public class RelationType
         ImmutableMap.Builder<String, List<Field>> nameIndexBuilder = ImmutableMap.builder();
         nameIndex.forEach((name, fieldList) -> nameIndexBuilder.put(name, ImmutableList.copyOf(fieldList)));
         this.fieldsByName = nameIndexBuilder.build();
+        this.otherFieldsByName = ImmutableMap.of();
+    }
+
+    /**
+     * Private constructor used by {@link #joinWith} to build a merged relation whose field
+     * indices were assembled by the caller — left fields keyed by {@code nameKeyFunction},
+     * right fields keyed by {@code otherNameKeyFunction}.
+     * <p>
+     * When the two functions are identical (same-catalog join) {@code otherFieldsByName} is
+     * empty and lookup falls through to {@code fieldsByName} only. When they differ
+     * (cross-catalog join) {@code resolveFields} consults both indices.
+     */
+    private RelationType(List<Field> allFields,
+            Map<String, List<Field>> fieldsByName,
+            Map<String, List<Field>> otherFieldsByName,
+            UnaryOperator<String> nameKeyFunction,
+            UnaryOperator<String> otherNameKeyFunction)
+    {
+        this.nameKeyFunction = requireNonNull(nameKeyFunction, "nameKeyFunction is null");
+        this.otherNameKeyFunction = otherNameKeyFunction;
+        this.allFields = ImmutableList.copyOf(requireNonNull(allFields, "allFields is null"));
+        this.visibleFields = ImmutableList.copyOf(this.allFields.stream().filter(not(Field::isHidden)).iterator());
+
+        int index = 0;
+        ImmutableMap.Builder<Field, Integer> builder = ImmutableMap.builder();
+        for (Field field : this.allFields) {
+            builder.put(field, index++);
+        }
+        this.fieldIndexes = builder.build();
+        this.fieldsByName = requireNonNull(fieldsByName, "fieldsByName is null");
+        this.otherFieldsByName = requireNonNull(otherFieldsByName, "otherFieldsByName is null");
     }
 
     /**
@@ -177,18 +217,34 @@ public class RelationType
 
     /**
      * Gets the index of all columns matching the specified name.
-     * The lookup key is produced by getNameKeyFunction, matching the same transformation applied at
-     * index-build time — so case-sensitive catalogs require exact-case matches.
+     * <p>
+     * For single-catalog relations the primary index ({@code fieldsByName}) is consulted using
+     * {@code nameKeyFunction}. For merged relations produced by {@link #joinWith} where the two
+     * sides carry different normalization rules, the secondary index ({@code otherFieldsByName})
+     * is also consulted using {@code otherNameKeyFunction}, so that each side's fields are
+     * resolved with their own catalog's rules.
      */
     public List<Field> resolveFields(QualifiedName name)
     {
-        List<Field> candidates = fieldsByName.getOrDefault(nameKeyFunction.apply(name.getOriginalSuffix().getValue()), ImmutableList.of());
-        if (candidates.isEmpty()) {
-            return ImmutableList.of();
-        }
-        return candidates.stream()
+        String suffix = name.getOriginalSuffix().getValue();
+
+        // Always check the primary index (left-side fields, or all fields for single-catalog relations).
+        ImmutableList.Builder<Field> result = ImmutableList.builder();
+        List<Field> primaryCandidates = fieldsByName.getOrDefault(nameKeyFunction.apply(suffix), ImmutableList.of());
+        primaryCandidates.stream()
                 .filter(field -> field.matchesPrefix(name.getPrefix()))
-                .collect(toImmutableList());
+                .forEach(result::add);
+
+        // For cross-catalog joins, also check the secondary index (right-side fields keyed by
+        // the other catalog's normalization function).
+        if (otherNameKeyFunction != null && !otherFieldsByName.isEmpty()) {
+            List<Field> otherCandidates = otherFieldsByName.getOrDefault(otherNameKeyFunction.apply(suffix), ImmutableList.of());
+            otherCandidates.stream()
+                    .filter(field -> field.matchesPrefix(name.getPrefix()))
+                    .forEach(result::add);
+        }
+
+        return result.build();
     }
 
     public boolean canResolve(QualifiedName name)
@@ -200,10 +256,11 @@ public class RelationType
      * Creates a new tuple descriptor containing all fields from this tuple descriptor
      * and all fields from the specified tuple descriptor.
      * <p>
-     * For cross-catalog joins the two relations may carry different nameKeyFunction values.
-     * The merged relation uses this relation's nameKeyFunction for fields coming from {@code this},
-     * and the other relation's nameKeyFunction for fields coming from {@code other}, by delegating
-     * field resolution back to each original relation via their stored functions.
+     * When both sides share the same nameKeyFunction (same-catalog join, the common case),
+     * a single unified index is built and the secondary index is empty. When the two sides
+     * carry different functions (cross-catalog join), left fields are indexed separately
+     * under {@code this.nameKeyFunction} and right fields under {@code other.nameKeyFunction},
+     * so that {@link #resolveFields} can apply the correct normalization rule to each side.
      */
     public RelationType joinWith(RelationType other)
     {
@@ -212,7 +269,39 @@ public class RelationType
                 .addAll(other.allFields)
                 .build();
 
-        return new RelationType(fields, this.nameKeyFunction);
+        // Same function on both sides (same-catalog join, the common case): build one unified index.
+        if (this.nameKeyFunction.equals(other.nameKeyFunction)) {
+            HashMap<String, List<Field>> unified = new HashMap<>();
+            for (Field field : fields) {
+                field.getName().ifPresent(name ->
+                        unified.computeIfAbsent(this.nameKeyFunction.apply(name), k -> new ArrayList<>()).add(field));
+            }
+            ImmutableMap.Builder<String, List<Field>> builder = ImmutableMap.builder();
+            unified.forEach((key, fieldList) -> builder.put(key, ImmutableList.copyOf(fieldList)));
+            return new RelationType(fields, builder.build(), ImmutableMap.of(),
+                    this.nameKeyFunction, null);
+        }
+
+        // Different functions (cross-catalog join): index each side separately so that
+        // resolveFields() can apply each catalog's own normalization when looking up names.
+        HashMap<String, List<Field>> leftIndex = new HashMap<>();
+        for (Field field : this.allFields) {
+            field.getName().ifPresent(name ->
+                    leftIndex.computeIfAbsent(this.nameKeyFunction.apply(name), k -> new ArrayList<>()).add(field));
+        }
+        ImmutableMap.Builder<String, List<Field>> leftBuilder = ImmutableMap.builder();
+        leftIndex.forEach((key, fieldList) -> leftBuilder.put(key, ImmutableList.copyOf(fieldList)));
+
+        HashMap<String, List<Field>> rightIndex = new HashMap<>();
+        for (Field field : other.allFields) {
+            field.getName().ifPresent(name ->
+                    rightIndex.computeIfAbsent(other.nameKeyFunction.apply(name), k -> new ArrayList<>()).add(field));
+        }
+        ImmutableMap.Builder<String, List<Field>> rightBuilder = ImmutableMap.builder();
+        rightIndex.forEach((key, fieldList) -> rightBuilder.put(key, ImmutableList.copyOf(fieldList)));
+
+        return new RelationType(fields, leftBuilder.build(), rightBuilder.build(),
+                this.nameKeyFunction, other.nameKeyFunction);
     }
 
     /**
