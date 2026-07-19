@@ -22,6 +22,7 @@ import com.facebook.presto.hive.gcs.HiveGcsConfig;
 import com.facebook.presto.hive.gcs.HiveGcsConfigurationInitializer;
 import com.facebook.presto.hive.s3.HiveS3Config;
 import com.facebook.presto.hive.s3.PrestoS3ConfigurationUpdater;
+import com.facebook.presto.iceberg.FileFormat;
 import com.facebook.presto.iceberg.IcebergCatalogName;
 import com.facebook.presto.iceberg.IcebergConfig;
 import com.facebook.presto.iceberg.IcebergNativeCatalogFactory;
@@ -37,6 +38,7 @@ import org.testng.annotations.Test;
 import java.io.File;
 import java.util.List;
 
+import static com.facebook.presto.iceberg.FileFormat.ORC;
 import static com.facebook.presto.iceberg.IcebergQueryRunner.ICEBERG_CATALOG;
 import static com.facebook.presto.iceberg.IcebergUtil.getNativeIcebergTable;
 import static com.facebook.presto.iceberg.rest.IcebergRestTestUtil.SESSION;
@@ -55,6 +57,7 @@ public abstract class IcebergRestNameMatchingTestBase
     protected TestingHttpServer restServer;
     protected String serverUri;
     protected File warehouseLocation;
+    protected FileFormat fileFormat = ORC;
 
     @BeforeClass
     public void init()

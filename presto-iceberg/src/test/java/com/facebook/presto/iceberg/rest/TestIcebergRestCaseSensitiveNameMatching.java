@@ -28,7 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import static com.facebook.presto.iceberg.CatalogType.REST;
-import static com.facebook.presto.iceberg.FileFormat.ORC;
 import static com.facebook.presto.iceberg.IcebergQueryRunner.ICEBERG_CATALOG;
 import static com.facebook.presto.iceberg.rest.IcebergRestTestUtil.restConnectorProperties;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
@@ -52,7 +51,7 @@ public class TestIcebergRestCaseSensitiveNameMatching
     {
         return IcebergQueryRunner.builder()
                 .setCatalogType(REST)
-                .setFormat(ORC)
+                .setFormat(fileFormat)
                 .setExtraConnectorProperties(ImmutableMap.<String, String>builder()
                         .putAll(restConnectorProperties(serverUri))
                         .put("case-sensitive-name-matching", "true")
