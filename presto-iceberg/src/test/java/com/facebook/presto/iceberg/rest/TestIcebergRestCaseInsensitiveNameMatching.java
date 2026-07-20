@@ -341,6 +341,156 @@ public class TestIcebergRestCaseInsensitiveNameMatching
         }
     }
 
+    /**
+     * Verifies that nested ROW field names are lowercased by {@code normalizeIdentifier}
+     * in case-insensitive mode — mixed-case names are stored and resolved as lowercase only.
+     */
+    @Test
+    public void testNestedRowFieldsCaseInsensitive()
+    {
+        // Basic nested ROW: mixed-case field names are lowercased on write.
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE nested_basic_ci (id bigint, addr ROW(\"Street\" varchar, \"City\" varchar))");
+            assertQuerySucceeds(testSession(), "INSERT INTO nested_basic_ci VALUES (1, ROW('Main St', 'Springfield'))");
+
+            // Stored as 'street' and 'city' — any case variant resolves to the same field.
+            assertQuery(testSession(), "SELECT addr.street, addr.city FROM nested_basic_ci",
+                    "VALUES ('Main St', 'Springfield')");
+            assertQuery(testSession(), "SELECT addr.\"Street\", addr.\"City\" FROM nested_basic_ci",
+                    "VALUES ('Main St', 'Springfield')");
+            assertQuery(testSession(), "SELECT addr.STREET, addr.CITY FROM nested_basic_ci",
+                    "VALUES ('Main St', 'Springfield')");
+
+            // Verify that the raw Iceberg schema stores lowercase field names.
+            Types.NestedField addrField = getIcebergTable(SCHEMA, "nested_basic_ci").schema().findField("addr");
+            List<Types.NestedField> subFields = addrField.type().asStructType().fields();
+            assertEquals(subFields.get(0).name(), "street", "Nested field 0 must be lowercased to 'street'");
+            assertEquals(subFields.get(1).name(), "city", "Nested field 1 must be lowercased to 'city'");
+            assertFalse(subFields.get(0).name().equals("Street"), "Nested field must not preserve 'Street' in case-insensitive mode");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS nested_basic_ci");
+        }
+    }
+
+    /**
+     * Verifies that nested fields whose names differ only in case collapse to the same
+     * lowercase field in case-insensitive mode — duplicates are rejected at CREATE time.
+     */
+    @Test
+    public void testNestedRowFieldsDistinctByCaseInsensitive()
+    {
+        // Attempting to create a ROW with sub-fields that normalise to the same name fails.
+        assertQueryFails(testSession(),
+                "CREATE TABLE nested_case_dup_ci (id bigint, metrics ROW(val bigint, Val bigint, VAL bigint))",
+                ".*Column name 'Val' specified more than once.*");
+
+        // A ROW with already-distinct lowercase sub-field names works, and any-case access resolves correctly.
+        try {
+            assertQuerySucceeds(testSession(), "CREATE TABLE nested_case_lower_ci (id bigint, metrics ROW(low bigint, high bigint))");
+            assertQuerySucceeds(testSession(), "INSERT INTO nested_case_lower_ci VALUES (1, ROW(10, 99))");
+
+            assertQuery(testSession(), "SELECT metrics.low, metrics.high FROM nested_case_lower_ci", "VALUES (10, 99)");
+            // Any-case variant resolves to the same stored lowercase field.
+            assertQuery(testSession(), "SELECT metrics.LOW, metrics.HIGH FROM nested_case_lower_ci", "VALUES (10, 99)");
+            assertQuery(testSession(), "SELECT metrics.Low, metrics.High FROM nested_case_lower_ci", "VALUES (10, 99)");
+
+            Types.NestedField metricsField = getIcebergTable(SCHEMA, "nested_case_lower_ci").schema().findField("metrics");
+            List<Types.NestedField> subFields = metricsField.type().asStructType().fields();
+            assertEquals(subFields.size(), 2, "ROW must have exactly 2 sub-fields");
+            assertEquals(subFields.get(0).name(), "low");
+            assertEquals(subFields.get(1).name(), "high");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS nested_case_lower_ci");
+        }
+    }
+
+    /**
+     * Verifies deeply nested ROW (struct inside struct) in case-insensitive mode — both
+     * levels of nesting are lowercased, and any-case access resolves to the stored name.
+     */
+    @Test
+    public void testDeeplyNestedRowFieldsCaseInsensitive()
+    {
+        // Two levels of nesting with mixed-case names.
+        try {
+            assertQuerySucceeds(testSession(),
+                    "CREATE TABLE nested_deep_ci (id bigint, person ROW(\"Name\" varchar, address ROW(\"Street\" varchar, \"Zip\" varchar)))");
+            assertQuerySucceeds(testSession(),
+                    "INSERT INTO nested_deep_ci VALUES (1, ROW('Alice', ROW('Baker St', '90210')))");
+
+            // All field names are lowercased — any-case variant resolves to the stored lowercase name.
+            assertQuery(testSession(), "SELECT person.name FROM nested_deep_ci", "VALUES ('Alice')");
+            assertQuery(testSession(), "SELECT person.\"Name\" FROM nested_deep_ci", "VALUES ('Alice')");
+            assertQuery(testSession(), "SELECT person.address.street, person.address.zip FROM nested_deep_ci",
+                    "VALUES ('Baker St', '90210')");
+            assertQuery(testSession(), "SELECT person.ADDRESS.STREET, person.ADDRESS.ZIP FROM nested_deep_ci",
+                    "VALUES ('Baker St', '90210')");
+
+            // Verify raw Iceberg schema stores lowercase names at both levels.
+            Types.NestedField personField = getIcebergTable(SCHEMA, "nested_deep_ci").schema().findField("person");
+            List<Types.NestedField> personSubFields = personField.type().asStructType().fields();
+            assertEquals(personSubFields.get(0).name(), "name", "Level-1 field 0 must be lowercased to 'name'");
+            assertEquals(personSubFields.get(1).name(), "address", "Level-1 field 1 must stay 'address'");
+            assertFalse(personSubFields.get(0).name().equals("Name"), "Level-1 field must not preserve 'Name' in case-insensitive mode");
+
+            List<Types.NestedField> addrSubFields = personSubFields.get(1).type().asStructType().fields();
+            assertEquals(addrSubFields.get(0).name(), "street", "Level-2 field 0 must be lowercased to 'street'");
+            assertEquals(addrSubFields.get(1).name(), "zip", "Level-2 field 1 must be lowercased to 'zip'");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS nested_deep_ci");
+        }
+    }
+
+    /**
+     * Verifies that a nested sub-field can share the same name as its parent column,
+     * and that case-insensitive resolution keeps the two scopes unambiguous.
+     *
+     * <p>Schema: {@code id bigint, addr ROW(addr varchar, id bigint, City varchar)}
+     * <ul>
+     *   <li>{@code addr} — top-level ROW column (stored as {@code addr})</li>
+     *   <li>{@code addr.addr} — sub-field with the same name as the parent; stored as {@code addr}</li>
+     *   <li>{@code addr.id} — sub-field with the same name as the sibling top-level column</li>
+     *   <li>{@code addr.City} — lowercased to {@code city} on write</li>
+     * </ul>
+     */
+    @Test
+    public void testNestedFieldNameSameAsParentColumn()
+    {
+        try {
+            assertQuerySucceeds(testSession(),
+                    "CREATE TABLE nested_shadow_ci (id bigint, addr ROW(addr varchar, id bigint, \"City\" varchar))");
+            assertQuerySucceeds(testSession(),
+                    "INSERT INTO nested_shadow_ci VALUES (1, ROW('Main St', 42, 'Springfield'))");
+
+            // Top-level 'id' and nested 'addr.id' are independent.
+            assertQuery(testSession(), "SELECT id FROM nested_shadow_ci", "VALUES (1)");
+            assertQuery(testSession(), "SELECT addr.id FROM nested_shadow_ci", "VALUES (42)");
+
+            // Top-level 'addr' (the ROW) vs nested 'addr.addr' (the varchar sub-field).
+            assertQuery(testSession(), "SELECT addr.addr FROM nested_shadow_ci", "VALUES ('Main St')");
+
+            // Mixed-case 'City' is lowercased to 'city'; any-case variant resolves to it.
+            assertQuery(testSession(), "SELECT addr.city FROM nested_shadow_ci", "VALUES ('Springfield')");
+            assertQuery(testSession(), "SELECT addr.\"City\" FROM nested_shadow_ci", "VALUES ('Springfield')");
+            assertQuery(testSession(), "SELECT addr.CITY FROM nested_shadow_ci", "VALUES ('Springfield')");
+
+            // Raw schema: sub-fields are lowercased — 'addr', 'id', 'city'.
+            Types.NestedField addrCol = getIcebergTable(SCHEMA, "nested_shadow_ci").schema().findField("addr");
+            List<Types.NestedField> subFields = addrCol.type().asStructType().fields();
+            assertEquals(subFields.size(), 3);
+            assertEquals(subFields.get(0).name(), "addr", "Sub-field 0 must be 'addr' (same as parent)");
+            assertEquals(subFields.get(1).name(), "id", "Sub-field 1 must be 'id' (same as sibling top-level)");
+            assertEquals(subFields.get(2).name(), "city", "Sub-field 2 must be lowercased to 'city'");
+            assertFalse(subFields.get(2).name().equals("City"), "Sub-field 2 must not preserve 'City' in case-insensitive mode");
+        }
+        finally {
+            assertQuerySucceeds(testSession(), "DROP TABLE IF EXISTS nested_shadow_ci");
+        }
+    }
+
     private Set<String> showStatsColumnNames(String tableName)
     {
         MaterializedResult result = computeActual(testSession(), "SHOW STATS FOR " + tableName);

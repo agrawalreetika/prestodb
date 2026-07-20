@@ -109,7 +109,8 @@ public class OrcBatchRecordReader
                 cacheable,
                 runtimeStats,
                 Optional.empty(),
-                 fileModificationTime);
+                fileModificationTime,
+                options.isCaseSensitiveNameMatching());
     }
 
     public int nextBatch()

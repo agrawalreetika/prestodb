@@ -557,7 +557,8 @@ public class ExpressionAnalyzer
                     if (outerScopeSymbolTypes.containsKey(NodeRef.of(node))) {
                         return setExpressionType(node, outerScopeSymbolTypes.get(NodeRef.of(node)));
                     }
-                    throw missingAttributeException(node, qualifiedName);
+                    UnaryOperator<String> nameKeyFunction = scope.getRelationType().getNameKeyFunction();
+                    throw missingAttributeException(node, qualifiedName, nameKeyFunction);
                 }
             }
 
@@ -577,9 +578,12 @@ public class ExpressionAnalyzer
             RowType rowType = (RowType) baseType;
             String fieldName = node.getField().getValue();
 
+            UnaryOperator<String> nameKeyFunction = context.getContext().getScope().getRelationType().getNameKeyFunction();
+
             Type rowFieldType = null;
             for (RowType.Field rowField : rowType.getFields()) {
-                if (fieldName.equalsIgnoreCase(rowField.getName().orElse(null))) {
+                String storedName = rowField.getName().orElse(null);
+                if (storedName != null && nameKeyFunction.apply(fieldName).equals(nameKeyFunction.apply(storedName))) {
                     rowFieldType = rowField.getType();
                     break;
                 }
@@ -594,7 +598,7 @@ public class ExpressionAnalyzer
 
             if (rowFieldType == null) {
                 qualifiedName = qualifiedName == null ? QualifiedName.of(node.toString()) : qualifiedName;
-                throw missingAttributeException(node, qualifiedName);
+                throw missingAttributeException(node, qualifiedName, nameKeyFunction);
             }
 
             return setExpressionType(node, rowFieldType);

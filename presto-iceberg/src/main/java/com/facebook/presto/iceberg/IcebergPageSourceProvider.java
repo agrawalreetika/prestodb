@@ -1147,6 +1147,7 @@ public class IcebergPageSourceProvider
                         .withTinyStripeThreshold(getOrcTinyStripeThreshold(session))
                         .withMaxBlockSize(getOrcMaxReadBlockSize(session))
                         .withZstdJniDecompressionEnabled(isOrcZstdJniDecompressionEnabled(session))
+                        .withCaseSensitiveNameMatching(caseSensitiveNameMatching)
                         .build();
 
                 // TODO: Implement EncryptionInformation in IcebergSplit instead of Optional.empty()
